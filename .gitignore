@@ -55,3 +55,9 @@ data/*.db
 # ─── Raspberry Pi / build artifacts ───────────────────
 *.img
 *.zip
+
+# ─── Test / tooling artifacts ─────────────────────────
+.playwright-mcp/
+backend/_smoke.py
+*.png
+
