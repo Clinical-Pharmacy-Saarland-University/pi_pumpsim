@@ -1,9 +1,10 @@
-# PumpSim — Game Design (v0.3)
+# PumpSim — Game Design (v0.5)
 
-> Living document. Status: **design locked enough to prototype** — „Dr. Dosis" blend,
-> mixed/all ages, hold-to-infuse dosing, short fixed 3-patient arc.
-> Concept brainstorm kept below (§1–§11); the chosen design is **§12**; the
-> build-ready slice is **§13**.
+> Living document. Status: **build-ready** — „Dr. Dosis", mixed/all ages, **dark** theme,
+> hold-to-infuse, 3-round **„Hilf der Familie!"** arc (Para → Sim+🍊 → Meto/CYP2D6),
+> real drugs + mascot pills, plain-words-with-term-in-brackets, German „du".
+> Refined: flow & wireframes (§14), art direction (§15), scenarios & PK (§16), copy (§17).
+> Concept brainstorm kept for reference in §1–§11; build slice in §13.
 > UI language: **German first**, built i18n-ready (English later).
 
 ## 1. The setup as a design asset
@@ -220,11 +221,12 @@ Freundlich, farbig, klar — **nicht kindisch**. Works for a 7-year-old and an a
 - **Feedback:** designed LED-ready, not LED-dependent.
 
 ### The 3-patient arc (concrete)
-| # | Patient (DE) | Setup | Twist | Teaches |
+_(Finalized in §16 — „Hilf der Familie!", accurate drugs:)_
+| # | Patient (DE) | Drug | Twist | Teaches |
 |---|---|---|---|---|
-| 1 | „Max, 8 – Fieber" | wide band, gentle decay | none (tutorial) | hold-to-dose, keep green |
-| 2 | „Lena, 10 – Schmerzen" | normal band/decay | 🍊 Grapefruitsaft mid-round → decay ×0.4 | FDI: ease off or go toxic |
-| 3 | „Onkel Tom – langsamer Stoffwechsel" | low decay from start (k×0.4) | optional 2nd drug | DGI: same dose hits harder |
+| 1 | „Max, 8 – Fieber" | Paracetamol „Para" | none (tutorial) | hold-to-dose, keep green |
+| 2 | „Eva (Mama), 42 – Cholesterin" | Simvastatin „Sim" | 🍊 Grapefruit → decay ×0.4 | FDI: Spiegel ↑ → Muskelschmerzen |
+| 3 | „Opa Karl, 70 – Blutdruck" | Metoprolol „Meto" | langsamer Stoffwechsel (k×0.4) | DGI: same dose hits harder |
 Then **„Geschafft!"**: total ⭐ + a one-line recap of each lesson.
 
 ### Hold-to-infuse mechanic
@@ -397,12 +399,12 @@ Two candidate **directions** (mockups produced for reaction — see `docs/mockup
 - **Wohlbefinden** `W` (0–100, start 60, cosmetic): in-green `+6/s`; below-low `−4/s`;
   above-high (toxic) `−8/s`. Face: 🙂 in green · 😣 too low · 🤢 too high.
 
-### The three patients
-| # | Patient | Band | k (1/s) | Start C | Event(s) | Dur | Teaches |
-|---|---|---|---|---|---|---|---|
-| 1 | **Max, 8 – Fieber** (tutorial) | 35–65 | 0.025 | 0 (fill it up) | — | ~45 s | hold-to-dose, keep green; on-screen hints |
-| 2 | **Lena, 10 – Schmerzen** | 40–60 | 0.030 | 50 (in band) | `t=25s`: 🍊 grapefruit → `k ×0.4` | ~60 s | FDI: decay slows → ease off or go toxic |
-| 3 | **Onkel Tom – langs. Stoffwechsel** | 42–58 | **0.012** (slow from start) | 0 | *(opt.* `t=40s`: 💊 inducer → `k ×2.5`)* | ~70 s | DGI: same dose hits harder; *(opt. DDI flip)* |
+### The three rounds — „Hilf der Familie!" (accurate, age-appropriate)
+| # | Family member | Drug (mascot) | Band | k (1/s) | Start | Event | Dur | Teaches |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **Max, 8 – Fieber** (tutorial) | Paracetamol **„Para"** 🟠 | 35–65 | 0.025 | 0 (fill up) | — | ~45 s | window; *zu viel = leberschädlich*; hints |
+| 2 | **Eva (Mama), 42 – Cholesterin** | Simvastatin **„Sim"** 🔵 | 40–60 | 0.030 | 50 (in band) | `t=25s` 🍊 → `k ×0.4` | ~60 s | FDI: Grapefruit ↑ Statin-Spiegel → Muskelschmerzen |
+| 3 | **Opa Karl, 70 – Blutdruck** | Metoprolol **„Meto"** 🟣 | 42–58 | **0.012** (slow) | 0 | *(opt.* `t=40s` 💊 inducer → `k ×2.5`)* | ~70 s | DGI: CYP2D6 langsam → stärkere Wirkung |
 
 - **Difficulty curve:** band narrows 30→20→16; clearance manipulated by trait/event.
 - **Tutorial hints (P1 only):** pulsing arrow on HALTEN; „Fülle den grünen Bereich" →
@@ -445,27 +447,34 @@ All UI text via `t('key')`; **no hard-coded strings** in components (English add
   "hint.hold": "Halten zum Dosieren",
   "hint.keep": "Super! Halte ihn dort.",
 
-  // patient cards
+  // family framing + patient cards
+  "attract.family": "Hilf der Familie, gesund zu bleiben!",
+  "intro.give": "Gib {name} etwas {drug}!",
   "p1.name": "Max", "p1.line": "Max, 8 – Fieber",
-  "p2.name": "Lena", "p2.line": "Lena, 10 – Schmerzen",
-  "p3.name": "Onkel Tom", "p3.line": "Onkel Tom – langsamer Stoffwechsel",
+  "p2.name": "Eva", "p2.line": "Eva (Mama), 42 – Cholesterin",
+  "p3.name": "Opa Karl", "p3.line": "Opa Karl, 70 – Blutdruck",
+
+  // drug mascots (short name + real name)
+  "drug.para": "Para", "drug.para.full": "Paracetamol",
+  "drug.sim": "Sim", "drug.sim.full": "Simvastatin",
+  "drug.meto": "Meto", "drug.meto.full": "Metoprolol",
 
   // events
   "ev.grapefruit": "🍊 {name} trinkt Grapefruitsaft!",
   "ev.grapefruit.sub": "Der Abbau wird langsamer.",
   "ev.inducer": "💊 {name} bekommt ein zweites Medikament",
   "ev.inducer.sub": "Der Abbau wird schneller.",
-  "ev.slowMetab": "🧬 {name} baut von Natur aus langsam ab",
+  "ev.slowMetab": "🧬 Opa Karl baut von Natur aus langsam ab",
 
   // „Wusstest du?" facts
-  "fact.p1": "Jedes Medikament hat einen „grünen Bereich“ – nicht zu wenig, nicht zu viel.",
-  "fact.p2": "Grapefruit kann ein Abbau-Enzym (CYP3A4) bremsen – dann bleibt mehr Wirkstoff im Körper.",
-  "fact.p3": "Manche Menschen bauen Medikamente von Natur aus langsamer ab (ihre Gene). Gleiche Dosis – stärkere Wirkung.",
+  "fact.p1": "Auch Paracetamol kann in zu hoher Dosis der Leber schaden – bleib im grünen Bereich!",
+  "fact.p2": "Grapefruit bremst das Abbau-Enzym (CYP3A4) – dann steigt der Spiegel von Simvastatin und es kann Muskelschmerzen geben.",
+  "fact.p3": "Opa baut Medikamente über das Enzym CYP2D6 langsam ab – wegen seiner Gene. Gleiche Dosis, stärkere Wirkung.",
 
   // summary recap
   "recap.p1": "Max ✓ richtig dosiert",
-  "recap.p2": "Lena ✓ Grapefruit gemeistert",
-  "recap.p3": "Onkel Tom ✓ langsamen Stoffwechsel erkannt"
+  "recap.p2": "Eva ✓ Grapefruit gemeistert",
+  "recap.p3": "Opa Karl ✓ langsamen Stoffwechsel erkannt"
 }
 ```
 
