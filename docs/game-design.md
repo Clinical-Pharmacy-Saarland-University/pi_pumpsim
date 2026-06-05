@@ -1,6 +1,7 @@
-# PumpSim — Game Design (brainstorm v0.1)
+# PumpSim — Game Design (v0.2)
 
-> Living document. Status: **brainstorming concepts**, not yet decided.
+> Living document. Status: **direction chosen** — „Dr. Dosis" blend, **mixed/all ages**.
+> Concept brainstorm kept below (§1–§11); the chosen design is **§12**.
 > UI language: **German first**, built i18n-ready (English later).
 
 ## 1. The setup as a design asset
@@ -151,3 +152,69 @@ one interaction concept per short round (education), all spotlighting the physic
 - **Tone:** playful/cartoony vs cool/semi-clinical?
 - **LEDs in the torso** on the table (future)? → shapes the feedback design.
 - Which **drugs** to name (real & DE-relevant) vs a generic „Medikament"?
+
+---
+
+## 12. Decided direction — v0.2: „Dr. Dosis" (mixed / all ages)
+Chosen: the **blend** (caretaker story + live keep-in-the-green + one twist/round).
+Audience **mixed/all ages** ⇒ the guiding rule is **instant to grasp, optional depth**.
+
+### Layered so anyone can play, anyone can learn more
+- **Layer 0 (5 seconds):** „Halte die Person im **grünen Bereich**." A gauge with a
+  green band; the level **sinks on its own**; you **dose to push it up**. Green =
+  patient smiles + stars tick. That's the whole game for a passer-by.
+- **Layer 1 (the hook, ~30–40 s in):** an **event** changes the rules — „🍊 Grapefruit!"
+  — one friendly line explains it; you must adapt. This is the fun + the lesson.
+- **Layer 2 (optional, for lingerers/pros):** the live **curve**, the real terms
+  („therapeutisches Fenster", „CYP3A4"), and a 5-second **„Wusstest du?"** at the end.
+
+### Core loop (one patient ≈ 60–90 s)
+1. Patient card (DE): name + ailment → goal „im grünen Bereich halten".
+2. Level decays continuously (**body pumps out**); player doses (**body pumps in**).
+3. One twist fires mid-round (grapefruit / 2nd drug / metaboliser trait).
+4. Result: ⭐ by **time-in-green**, patient mood, one **„Wusstest du?"** line.
+5. Body **auto-drains**, next patient.
+
+### Dose interaction (recommended)
+**Hold-to-infuse syringe:** press & hold the big syringe → the pump runs **in** and
+the body fills *while held*; release to stop. Overshoot toward "toxic" is a real risk
+→ teaches "not too much," and the touch action maps 1:1 to the physical pump. (Tap-bolus
+is the alternative; decided in this iteration.)
+
+### Scoring / feedback
+- **Wohlbefinden** bar: ↑ while green, ↓ while too low/high (faster when toxic).
+- **Zeit im grünen Bereich** → 1–3 ⭐ per patient; session total at the end.
+- On-screen **face emotes** (🙂/😣/🤢) — the *screen* shows mood (the body can't), the
+  *body* shows the level. (Future: LED strip glows the body green/red to merge both.)
+
+### Screen layout (1280×720, clean, German)
+```
+┌───────────────────────────── event banner (when active) ─────────────────────────────┐
+│  [Patient face + name/mood]        │   „Wirkstoff-Spiegel"  gauge + green band + curve │
+│   (screen = emotion)               │   (mirrors the physical body)                    │
+│                                    │                                                  │
+│   ⭐⭐ · Wohlbefinden ▓▓▓░          │            ⟶  [ ●  HALTEN zum Dosieren ]  ⟵       │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+```
+The on-screen gauge **replaces the dev water-avatar** (the real body is the vessel);
+in dev with no hardware, the gauge stands in for the body.
+
+### Maps onto the existing engine
+The current sim already has level, `clearance_k` (decay), dead volume (tube prime),
+capacity, target window. The game adds:
+- **Events** that modulate `clearance_k` live (🍊 ×0.4, 🌿 ×2, langsam ×0.5, schnell ×2)
+  and optionally shift the window;
+- a **scenario script** (timed events per patient) + level progression;
+- a **well-being** integrator + star scoring;
+- a **hold-to-dose** continuous pump-in command (pump start/stop) alongside bolus.
+
+### Tone
+Freundlich, farbig, klar — **nicht kindisch**. Works for a 7-year-old and an adult.
+
+### Still open (this iteration)
+- **Dose interaction:** hold-to-infuse vs tap-bolus.
+- **Session shape:** short fixed arc (~3 patients → „Geschafft!") vs endless
+  (one patient, escalating, high-score).
+- (defaults unless changed) **Drugs:** real & familiar in DE (Paracetamol/Ibuprofen),
+  kept simple. **Feedback:** designed LED-ready but not LED-dependent.
+
