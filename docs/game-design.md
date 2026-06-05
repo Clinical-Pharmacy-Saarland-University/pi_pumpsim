@@ -377,6 +377,14 @@ Two candidate **directions** (mockups produced for reaction — see `docs/mockup
 > Palette: bg `#0b1020`/`#161f3d`, green `#38e0a0`, water `#4cc9f0→#7c5cff`,
 > grapefruit/amber `#ffb703`, toxic `#ff6b7a`.
 
+### Drug mascots (decided: real names + a friendly pill character)
+- Each drug = a rounded pill/capsule with eyes + a small mouth, a short name, a color.
+- Shown in: patient INTRO („Gib Max etwas **Para**!"), a small badge by the HALTEN
+  button in play, and it visually „flows in" while dosing. 2–3 expressions.
+- Names = friendly short forms paired with the real name in small text:
+  **Para** (Paracetamol), **Ibu** (Ibuprofen), **Sim** (Simvastatin)…
+- Clearly toys, not endorsements.
+
 ## 16. Scenario scripts & PK tuning (v0.4)
 
 ### Global model & constants (normalized 0–100 „Spiegel" scale)
@@ -461,9 +469,24 @@ All UI text via `t('key')`; **no hard-coded strings** in components (English add
 }
 ```
 
-> **Open content decisions (need your review):**
-> - **Drug naming:** name real drugs (Paracetamol für Max, Ibuprofen für Lena) or keep
->   a generic „Medikament"? (Leaning: name familiar ones, simply.)
-> - **Jargon level:** show „CYP3A4"/„Gene" to everyone, or hide in an optional „mehr"?
-> - **German wording:** your call on tone — „du" (used here) vs neutral; any phrasing tweaks.
+**Decided:** real drug names **+ mascot pill**; jargon = **plain word + real term in
+brackets**; tone „du".
+
+### Drugs & pharmacological accuracy (open — your call)
+⚠️ The **grapefruit ↔ CYP3A4** interaction is real for CYP3A4 substrates (Simvastatin,
+Amlodipin, Ciclosporin…) — **not** for Paracetamol/Ibuprofen. So naming real drugs *and*
+staying accurate needs care. A **family framing** resolves it cleanly (members of
+different ages → age-appropriate, accurate drugs, and a cohesive „hilf der Familie" story):
+
+| Round | Family member | Drug (mascot) | Real basis |
+|---|---|---|---|
+| 1 | Max, 8 – Fieber | Paracetamol („Para") | therapeutic window; overdose = leberschädlich (accurate, important) |
+| 2 | Mama – Cholesterin | Simvastatin („Sim") + 🍊 | grapefruit ↑ Statin-Spiegel → Muskelschmerzen (textbook CYP3A4) |
+| 3 | Opa – langsamer Metabolisierer | CYP2D6-Arznei (z.B. Metoprolol) | Gen-Variante → stärkere Wirkung |
+
+Alternative: keep kid drugs (Paracetamol/Ibuprofen) with **simplified** effects (+ tiny
+„vereinfacht dargestellt"). Your accuracy bar + preferred teaching examples decide this.
+
+### German wording
+„du"-Ansprache used throughout. Open to your edits on any phrasing.
 
