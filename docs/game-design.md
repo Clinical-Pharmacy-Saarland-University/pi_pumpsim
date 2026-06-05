@@ -262,3 +262,116 @@ Build on the existing scaffold, **mock pump on the dev PC**:
 - Defer: LEDs, sound polish, patient #3's 2nd-drug event, real hardware.
 Outcome: a full, demoable round loop you can play in a browser, no Pi needed.
 
+---
+
+## 14. Game flow & screen wireframes (v0.4)
+
+### State machine
+```
+        ┌─────────────────────────────── (idle timeout, any state) ──────────────┐
+        ▼                                                                         │
+   ┌─────────┐  tap   ┌───────┐  →  ┌──────┐  time/fail  ┌────────┐  next  ┌─────────┐
+   │ ATTRACT │ ─────► │ INTRO │ ──► │ PLAY │ ──────────► │ RESULT │ ─────► │ (next   │
+   │ (idle)  │        │patient│     │      │             │ patient│        │ patient)│
+   └─────────┘        └───────┘     └──────┘             └────────┘        └────┬────┘
+        ▲                                                                       │ after #3
+        │                          ┌─────────────┐                             ▼
+        └───── „Nochmal" / idle ───│  „GESCHAFFT" │◄────────────────────────────┘
+                                   │  (summary)   │
+                                   └─────────────┘
+   ADMIN: hidden — keyboard `A` or 3-s long-press top-left corner; overlay; never in normal play.
+```
+Between players the **body auto-drains** (pump out to empty) so each session starts clean.
+
+### Screens
+**ATTRACT (idle)** — magnet for passers-by.
+```
+┌──────────────────────────────────────────────────────┐
+│                    💧  Dr. Dosis                       │
+│              Bleib im grünen Bereich!                  │
+│         (body gently fills/drains in a loop)          │
+│                                                        │
+│                 ▶  Tippen zum Starten                  │
+└──────────────────────────────────────────────────────┘
+```
+
+**INTRO (per patient)** — 1 card, ~3 s or tap „Los!".
+```
+┌──────────────────────────────────────────────────────┐
+│   Patient 1/3                                          │
+│        🧒  „Max, 8 — Fieber"                           │
+│   Halte seinen Wirkstoff-Spiegel im grünen Bereich.   │
+│                      [  Los!  ]                        │
+└──────────────────────────────────────────────────────┘
+```
+
+**PLAY** — the core screen.
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Patient 2/3   Lena, 10 · Schmerzen        ⭐⭐☆       0:42     │  top bar
+│        ┌──────── 🍊 Lena trinkt Grapefruitsaft! ────────┐     │  event banner
+│        └────────────────────────────────────────────────┘     │
+│   ┌───────────────┐                         ┌──────┐          │
+│   │   ( face 🙂 )  │                         │░░░░░░│          │
+│   │               │                         │▓▓▓▓▓▓│ green band│
+│   │   Lena        │                         │██████│ ← level   │
+│   │ Wohlbefinden  │                         │██████│   gauge   │
+│   │ ▓▓▓▓▓░░        │                         │██████│ (=body)   │
+│   └───────────────┘                         └──────┘          │
+│   „Im grünen Bereich!"  ·  18 s                               │
+│              ┌────────────────────────────┐                   │
+│              │   ◉   HALTEN  zum Dosieren  │  ← hold to infuse │
+│              └────────────────────────────┘                   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**RESULT (per patient)** — ~4 s or tap „Weiter".
+```
+┌──────────────────────────────────────────────────────┐
+│                  ⭐⭐☆   für Lena                       │
+│            72 % im grünen Bereich · 🙂                  │
+│  Wusstest du?  Grapefruit kann den Abbau mancher      │
+│                Medikamente bremsen.                     │
+│                     [  Weiter  ]                       │
+└──────────────────────────────────────────────────────┘
+```
+
+**„GESCHAFFT" (summary)** — end of the 3-patient arc.
+```
+┌──────────────────────────────────────────────────────┐
+│                   🎉  Geschafft!                       │
+│                 ⭐⭐⭐⭐⭐⭐⭐☆☆  (7/9)                    │
+│   Max ✓ richtig dosiert · Lena ✓ Grapefruit gemeistert │
+│   Onkel Tom ✓ langsamer Stoffwechsel erkannt          │
+│              [ Nochmal ]     (auto-reset)              │
+└──────────────────────────────────────────────────────┘
+```
+
+**ADMIN (hidden overlay)** — operator only. Calibration (pump rate, dead volume,
+level→ml mapping, window), manual pump in/out test, language, exit. Entered by
+keyboard `A` or a 3-second long-press in the top-left corner; never shown in play.
+
+### Idle / reset rules
+- No input for ~20 s in INTRO/RESULT/SUMMARY, or ~30 s mid-PLAY → fade to ATTRACT,
+  drain the body.
+- ATTRACT loops a gentle fill/drain demo to attract attention.
+
+## 15. Visual & art direction (v0.4)
+Goal: **clean, modern, friendly — not childish**; readable across a crowded room;
+works for a 7-year-old and an adult. The physical body is the hero; the screen is
+calm and legible around it.
+
+Principles:
+- **Big, few elements.** One primary action (HALTEN), one primary readout (gauge).
+- **Color = meaning.** Green = good/therapeutic; amber = edge; red = too much/too little.
+- **Rounded, soft, tactile.** Large touch targets, gentle motion, no clutter.
+- **Type:** one friendly geometric sans; large weights; high contrast.
+
+Two candidate **directions** (mockups produced for reaction — see `docs/mockups/`):
+- **L — „Klar & Freundlich" (light):** airy off-white, soft shadows, vivid friendly
+  accents. Reads great in bright daylight rooms; approachable.
+- **D — „Cool & Modern" (dark):** deep navy, glowing green target, glassy cards. Sleeker,
+  more "tech/game"; makes the gauge glow. (Matches the current dev scaffold.)
+
+> Decision pending: pick L or D (or a blend) from the mockups.
+
