@@ -373,5 +373,97 @@ Two candidate **directions** (mockups produced for reaction — see `docs/mockup
 - **D — „Cool & Modern" (dark):** deep navy, glowing green target, glassy cards. Sleeker,
   more "tech/game"; makes the gauge glow. (Matches the current dev scaffold.)
 
-> Decision pending: pick L or D (or a blend) from the mockups.
+> **Chosen: D — „Cool & Modern" (dark).** Mockup: `docs/mockups/play-dark.html`.
+> Palette: bg `#0b1020`/`#161f3d`, green `#38e0a0`, water `#4cc9f0→#7c5cff`,
+> grapefruit/amber `#ffb703`, toxic `#ff6b7a`.
+
+## 16. Scenario scripts & PK tuning (v0.4)
+
+### Global model & constants (normalized 0–100 „Spiegel" scale)
+- **Decay** (metabolism / pump-out): `dC/dt = -k·C`.
+- **Dose** (hold / pump-in): `dC/dt = +rate` while held. `rate = 10 /s`
+  (a ~1 s hold ≈ +10; lets you titrate in quarter-band nudges).
+- **Tube** starts **primed** (gameplay is immediate; dead-volume is a hardware-calibration
+  concern, not a game mechanic).
+- **Time-in-green** fraction `f` → stars: `f≥0.80 → ⭐⭐⭐`, `≥0.55 → ⭐⭐`, `≥0.30 → ⭐`, else 0.
+- **Wohlbefinden** `W` (0–100, start 60, cosmetic): in-green `+6/s`; below-low `−4/s`;
+  above-high (toxic) `−8/s`. Face: 🙂 in green · 😣 too low · 🤢 too high.
+
+### The three patients
+| # | Patient | Band | k (1/s) | Start C | Event(s) | Dur | Teaches |
+|---|---|---|---|---|---|---|---|
+| 1 | **Max, 8 – Fieber** (tutorial) | 35–65 | 0.025 | 0 (fill it up) | — | ~45 s | hold-to-dose, keep green; on-screen hints |
+| 2 | **Lena, 10 – Schmerzen** | 40–60 | 0.030 | 50 (in band) | `t=25s`: 🍊 grapefruit → `k ×0.4` | ~60 s | FDI: decay slows → ease off or go toxic |
+| 3 | **Onkel Tom – langs. Stoffwechsel** | 42–58 | **0.012** (slow from start) | 0 | *(opt.* `t=40s`: 💊 inducer → `k ×2.5`)* | ~70 s | DGI: same dose hits harder; *(opt. DDI flip)* |
+
+- **Difficulty curve:** band narrows 30→20→16; clearance manipulated by trait/event.
+- **Tutorial hints (P1 only):** pulsing arrow on HALTEN; „Fülle den grünen Bereich" →
+  once in green „Super! Halte ihn dort." Hints off for P2/P3.
+- **P3's 2nd-drug event is Milestone-2-optional** (full vision keeps it; first slice may omit).
+
+## 17. German copy / locale draft (→ `frontend/src/locales/de.json`)
+All UI text via `t('key')`; **no hard-coded strings** in components (English added later as
+`en.json`). `{name}`, `{n}`, `{p}`, `{s}` are interpolations.
+
+```jsonc
+{
+  "app.title": "Dr. Dosis",
+  "attract.tagline": "Bleib im grünen Bereich!",
+  "attract.start": "Tippen zum Starten",
+
+  "intro.patientOf": "Patient {n}/3",
+  "intro.go": "Los!",
+  "intro.goal": "Halte den Wirkstoff-Spiegel im grünen Bereich.",
+
+  "play.gaugeTitle": "Wirkstoff-Spiegel",
+  "play.hold": "HALTEN",
+  "play.holdSub": "zum Dosieren",
+  "play.wellbeing": "Wohlbefinden",
+  "play.inGreenFor": "{s} s im grünen Bereich",
+  "status.in": "Im grünen Bereich!",
+  "status.low": "Zu wenig!",
+  "status.high": "Zu viel!",
+
+  "result.starsFor": "für {name}",
+  "result.greenPct": "{p}% im grünen Bereich",
+  "result.didYouKnow": "Wusstest du?",
+  "result.next": "Weiter",
+
+  "summary.title": "Geschafft!",
+  "summary.again": "Nochmal",
+
+  // tutorial hints (Max)
+  "hint.fill": "Fülle den grünen Bereich",
+  "hint.hold": "Halten zum Dosieren",
+  "hint.keep": "Super! Halte ihn dort.",
+
+  // patient cards
+  "p1.name": "Max", "p1.line": "Max, 8 – Fieber",
+  "p2.name": "Lena", "p2.line": "Lena, 10 – Schmerzen",
+  "p3.name": "Onkel Tom", "p3.line": "Onkel Tom – langsamer Stoffwechsel",
+
+  // events
+  "ev.grapefruit": "🍊 {name} trinkt Grapefruitsaft!",
+  "ev.grapefruit.sub": "Der Abbau wird langsamer.",
+  "ev.inducer": "💊 {name} bekommt ein zweites Medikament",
+  "ev.inducer.sub": "Der Abbau wird schneller.",
+  "ev.slowMetab": "🧬 {name} baut von Natur aus langsam ab",
+
+  // „Wusstest du?" facts
+  "fact.p1": "Jedes Medikament hat einen „grünen Bereich“ – nicht zu wenig, nicht zu viel.",
+  "fact.p2": "Grapefruit kann ein Abbau-Enzym (CYP3A4) bremsen – dann bleibt mehr Wirkstoff im Körper.",
+  "fact.p3": "Manche Menschen bauen Medikamente von Natur aus langsamer ab (ihre Gene). Gleiche Dosis – stärkere Wirkung.",
+
+  // summary recap
+  "recap.p1": "Max ✓ richtig dosiert",
+  "recap.p2": "Lena ✓ Grapefruit gemeistert",
+  "recap.p3": "Onkel Tom ✓ langsamen Stoffwechsel erkannt"
+}
+```
+
+> **Open content decisions (need your review):**
+> - **Drug naming:** name real drugs (Paracetamol für Max, Ibuprofen für Lena) or keep
+>   a generic „Medikament"? (Leaning: name familiar ones, simply.)
+> - **Jargon level:** show „CYP3A4"/„Gene" to everyone, or hide in an optional „mehr"?
+> - **German wording:** your call on tone — „du" (used here) vs neutral; any phrasing tweaks.
 
