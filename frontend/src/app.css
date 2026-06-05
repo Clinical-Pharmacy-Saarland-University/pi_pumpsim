@@ -1,28 +1,35 @@
 :root {
-  --bg-0: #0b1020;
-  --bg-1: #141b33;
-  --panel: rgba(255, 255, 255, 0.04);
-  --panel-border: rgba(255, 255, 255, 0.1);
+  --bg0: #0b1020;
+  --bg1: #161f3d;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface2: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.12);
   --text: #e8edff;
-  --text-dim: #9aa6c9;
-  --accent: #4cc9f0;
-  --accent-2: #7c5cff;
-  --good: #38e0a0;
-  --warn: #ffd166;
-  --bad: #ff6b7a;
+  --dim: #9aa6c9;
+  --green: #38e0a0;
+  --green-soft: rgba(56, 224, 160, 0.18);
+  --green-line: rgba(56, 224, 160, 0.8);
+  --water-top: #4cc9f0;
+  --water-bot: #7c5cff;
+  --grape: #ffb703;
+  --toxic: #ff6b7a;
+  --para: #ffb703;
+  --sim: #4cc9f0;
+  --meto: #b794ff;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 * {
   box-sizing: border-box;
+  margin: 0;
 }
 
 html,
 body {
-  margin: 0;
   height: 100%;
   overflow: hidden;
-  background: radial-gradient(1200px 800px at 50% -10%, var(--bg-1), var(--bg-0));
+  background: radial-gradient(1200px 700px at 50% -8%, var(--bg1), var(--bg0));
   color: var(--text);
   -webkit-user-select: none;
   user-select: none;
@@ -38,5 +45,25 @@ button {
   font: inherit;
   color: var(--text);
   cursor: pointer;
+  border: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* shared button styles */
+.btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 34px;
+  font-size: 20px;
+  font-weight: 700;
+  transition: transform 0.06s ease, filter 0.2s ease;
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn.primary {
+  background: linear-gradient(135deg, var(--water-top), var(--water-bot));
+  border: none;
+  box-shadow: 0 14px 40px rgba(76, 201, 240, 0.32);
 }

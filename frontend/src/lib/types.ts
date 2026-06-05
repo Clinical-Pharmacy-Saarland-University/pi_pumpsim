@@ -1,23 +1,32 @@
-export interface Calibration {
-  pump_rate_ml_s: number
-  dead_volume_ml: number
-  capacity_ml: number
-  target_low_ml: number
-  target_high_ml: number
-  clearance_k: number
+export type Phase = 'idle' | 'running' | 'ended'
+
+export interface GameState {
+  phase: Phase
+  scenario_id: string | null
+  t: number
+  duration: number
+  level: number
+  capacity: number
+  band_low: number
+  band_high: number
+  in_green: boolean
+  well_being: number
+  time_in_green: number
+  green_pct: number
+  hold: boolean
+  k_mult: number
+  active_event: string | null
+  stars: number
+  pump_running: boolean
 }
 
-export type Mode = 'idle' | 'priming' | 'dosing'
-
-export interface Telemetry {
-  t: number
-  mode: Mode
-  pump_running: boolean
-  pump_flow_ml_s: number
-  primed: boolean
-  primed_ml: number
-  delivered_ml: number
-  level_ml: number
-  in_target: boolean
-  calibration: Calibration
+export interface ScenarioMeta {
+  id: string
+  patient_id: string
+  drug_id: string
+  band_low: number
+  band_high: number
+  duration: number
+  tutorial: boolean
+  events: { t: number; type: string }[]
 }

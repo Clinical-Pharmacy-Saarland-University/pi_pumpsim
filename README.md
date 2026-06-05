@@ -40,10 +40,12 @@ This separation is what lets us build & run the whole thing on Windows now (`Moc
 and swap in real GPIO on the Pi later, with the same UI code.
 
 ## Status
-✅ **Milestone 1 scaffold** — runs on Windows with the mock pump. The mock pump
-fills the avatar, the PK engine applies first-order elimination, the live water
-level animates over a WebSocket, touch controls + a keyboard admin/calibration
-panel work. No Pi required yet.
+✅ **Milestone 2 — „Dr. Dosis" first playable** (mock pump, browser, no Pi). The full
+game loop runs: Attract → Intro → Play → Result → „Geschafft!" across a 3-round
+**„Hilf der Familie!"** arc (Max/Paracetamol · Eva/Simvastatin+Grapefruit · Opa/Metoprolol).
+Hold-to-infuse dosing, a live „Spiegel" gauge with the therapeutic window, event
+system (DDI/DGI/FDI modulating clearance), well-being + stars, German UI (i18n-ready),
+hidden admin (`A`). See [docs/game-design.md](docs/game-design.md).
 
 ## Quick start (Windows dev)
 ```powershell
@@ -64,32 +66,29 @@ cd frontend; npm run dev
 Tests: `cd backend; .\.venv\Scripts\python.exe -m pytest`
 
 ## Controls
-- **Touch**: dose chips (5/10/25/50 ml), Deliver, Prime, Stop, Empty, Reset.
-- **Keyboard (admin/debug)**: `A` admin panel · `P` prime · `D` dose · `Space` stop ·
-  `E` empty · `R` reset · `Esc` close admin.
-- **Admin panel** (`A`): live-edit calibration (pump rate, dead volume, capacity,
-  target window, clearance) + raw telemetry feed.
+- **Play**: tap to start → **hold the syringe** (HALTEN) to dose; keep the level in the
+  green band as it drains and events (grapefruit etc.) disturb it.
+- **Hidden admin** (`A` / `Esc`): jump to any round + live telemetry feed. Never shown
+  during normal play.
 
 ## Layout
 ```
 backend/
   app/
-    main.py              # FastAPI: REST commands + WebSocket telemetry, serves built UI
-    config.py            # Settings (env/.env) + validated Calibration model
-    runner.py            # async sim loop: pump → engine → broadcast; command handling
-    sim/engine.py        # PK simulation (pure logic, unit-tested)
-    hardware/pump.py     # Pump interface (HAL)
-    hardware/mock_pump.py
-    hardware/real_pump.py   # gpiozero, imported lazily (Pi only)
-    hardware/factory.py  # PUMP_BACKEND -> Mock | Real
-  tests/                 # pytest (engine + pump)
-  requirements.txt / requirements-dev.txt / .env.example
-frontend/                # Vite + Svelte + TS
-  src/App.svelte         # main screen + keyboard handling
-  src/lib/Avatar.svelte  # animated water vessel + target band
-  src/lib/AdminPanel.svelte
-  src/lib/api.ts         # WebSocket + REST client
-scripts/setup.ps1, run-dev.ps1
+    main.py                # FastAPI: game REST + WebSocket GameState, serves built UI
+    config.py              # Settings (env/.env)
+    game/scenarios.py      # the 3-round arc + PK params (bands, clearance, events)
+    game/engine.py         # GameEngine — pure round simulation (unit-tested)
+    game/runner.py         # async loop: engine ↔ pump, broadcast GameState
+    hardware/pump.py       # Pump interface (HAL): mock_pump / real_pump (gpiozero) / factory
+  tests/                   # pytest (game engine + pump)
+frontend/                  # Vite + Svelte 5 + TS
+  src/App.svelte           # screen routing + keyboard (admin)
+  src/lib/game.svelte.ts   # client flow store (which screen, round progression)
+  src/lib/locale.ts        # German strings + t()  (i18n-ready)
+  src/lib/{Gauge,HoldButton,Mascot,PatientFace}.svelte
+  src/lib/screens/{Attract,Intro,Play,Result,Summary,Admin}.svelte
+scripts/setup.ps1, run-dev.ps1   ·   deploy/  (Pi kiosk)
 ```
 
 ## PK model (current, deliberately simple)
