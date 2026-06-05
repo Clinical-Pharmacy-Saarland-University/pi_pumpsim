@@ -1,0 +1,57 @@
+# ─── OS ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Editors / IDEs ───────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+*.swp
+*~
+
+# ─── Secrets / local config ───────────────────────────
+.env
+.env.*
+!.env.example
+config.local.*
+*.local.json
+
+# ─── Python (backend / sim / hardware layer) ──────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ─── Node / web frontend ──────────────────────────────
+node_modules/
+dist/
+build/
+.vite/
+.parcel-cache/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# ─── Logs / runtime data / calibration dumps ──────────
+*.log
+logs/
+data/*.csv
+data/*.sqlite
+data/*.db
+!data/.gitkeep
+
+# ─── Raspberry Pi / build artifacts ───────────────────
+*.img
+*.zip
