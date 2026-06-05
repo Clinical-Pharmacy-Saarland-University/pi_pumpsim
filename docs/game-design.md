@@ -1,7 +1,9 @@
-# PumpSim — Game Design (v0.2)
+# PumpSim — Game Design (v0.3)
 
-> Living document. Status: **direction chosen** — „Dr. Dosis" blend, **mixed/all ages**.
-> Concept brainstorm kept below (§1–§11); the chosen design is **§12**.
+> Living document. Status: **design locked enough to prototype** — „Dr. Dosis" blend,
+> mixed/all ages, hold-to-infuse dosing, short fixed 3-patient arc.
+> Concept brainstorm kept below (§1–§11); the chosen design is **§12**; the
+> build-ready slice is **§13**.
 > UI language: **German first**, built i18n-ready (English later).
 
 ## 1. The setup as a design asset
@@ -211,10 +213,52 @@ capacity, target window. The game adds:
 ### Tone
 Freundlich, farbig, klar — **nicht kindisch**. Works for a 7-year-old and an adult.
 
-### Still open (this iteration)
-- **Dose interaction:** hold-to-infuse vs tap-bolus.
-- **Session shape:** short fixed arc (~3 patients → „Geschafft!") vs endless
-  (one patient, escalating, high-score).
-- (defaults unless changed) **Drugs:** real & familiar in DE (Paracetamol/Ibuprofen),
-  kept simple. **Feedback:** designed LED-ready but not LED-dependent.
+### Locked decisions
+- **Dosing:** hold-to-infuse (hold syringe → pump in; release → stop; overshoot = risk).
+- **Session:** short fixed **3-patient arc** → „Geschafft!" summary. Walk away anytime.
+- **Drugs:** real & familiar in DE (Paracetamol/Ibuprofen), kept simple.
+- **Feedback:** designed LED-ready, not LED-dependent.
+
+### The 3-patient arc (concrete)
+| # | Patient (DE) | Setup | Twist | Teaches |
+|---|---|---|---|---|
+| 1 | „Max, 8 – Fieber" | wide band, gentle decay | none (tutorial) | hold-to-dose, keep green |
+| 2 | „Lena, 10 – Schmerzen" | normal band/decay | 🍊 Grapefruitsaft mid-round → decay ×0.4 | FDI: ease off or go toxic |
+| 3 | „Onkel Tom – langsamer Stoffwechsel" | low decay from start (k×0.4) | optional 2nd drug | DGI: same dose hits harder |
+Then **„Geschafft!"**: total ⭐ + a one-line recap of each lesson.
+
+### Hold-to-infuse mechanic
+- Big circular **„HALTEN"** syringe button. While held: pump runs **in**, level rises
+  at `pump_rate`; plunger animates; subtle sound. Release → stop. Decay always runs.
+- **Overshoot above the band = toxic** → well-being drops → you learn to pulse/anticipate.
+- Skill = account for the *ongoing* drain while you dose.
+
+### Scoring / feedback (concrete enough to build)
+- **Time-in-green** drives stars per patient: `≥80% → ⭐⭐⭐`, `≥50% → ⭐⭐`, `>0 → ⭐`.
+- **Wohlbefinden** bar (mood) = visual only: rises in-green, falls out (steeper when
+  toxic). Patient face 🙂/😣/🤢 follows it. A live „X s im grünen Bereich" counter.
+- Per patient ~60–75 s. Forgiving: low score still finishes the arc (everyone "wins").
+
+### PK numbers (starter, all calibratable in the existing config)
+Normalized 0–100 "Spiegel" scale (calibration maps it to physical ml later).
+- band: P1 `[35,65]`, P2 `[40,60]`, P3 `[42,58]` (narrows slightly).
+- decay `k`: ~`0.03/s`; grapefruit ×0.4; slow-metaboliser ×0.4.
+- `pump_rate`: fills ~0–100 in ~6–8 s of holding (tune for feel).
+
+### Starter German copy (→ becomes `de` locale)
+- Attract: „**Dr. Dosis** — Bleib im grünen Bereich!" · „Tippen zum Starten"
+- In round: „Halte den Spiegel im **grünen Bereich**" · Button „HALTEN" ·
+  Status „Im grünen Bereich!" / „Zu wenig!" / „Zu viel!"
+- Events: „🍊 Lena trinkt Grapefruitsaft!" · „🧬 Onkel Tom baut langsam ab"
+- End: „Geschafft!" · „Wusstest du? Grapefruit kann den Abbau mancher Medikamente bremsen."
+
+## 13. First playable (Milestone 2 scope)
+Build on the existing scaffold, **mock pump on the dev PC**:
+- Replace the dev water-avatar with the **„Spiegel" gauge + green band** (+ optional curve).
+- **Hold-to-infuse** control (continuous pump-in command) + decay already in engine.
+- **Event system** (timed `clearance_k` modulation) + the **3-patient arc** script.
+- **Well-being + stars + time-in-green**; attract → 3 patients → „Geschafft!".
+- All strings via a **`de` locale** module (`t('key')`) — i18n-ready, German shipped.
+- Defer: LEDs, sound polish, patient #3's 2nd-drug event, real hardware.
+Outcome: a full, demoable round loop you can play in a browser, no Pi needed.
 
