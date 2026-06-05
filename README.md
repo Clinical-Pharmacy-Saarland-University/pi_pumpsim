@@ -98,22 +98,14 @@ The avatar level then decays with **first-order elimination** `dL/dt = -k·L`
 (the body clearing the dose). The **target window** `[low, high]` is the
 therapeutic range. All tunable live from the admin panel.
 
-## Later: real hardware (on the Pi)
-1. `pip install gpiozero rpi-lgpio`
-2. Set `PUMP_BACKEND=real` and `PUMP_GPIO_PIN=<bcm>` in `backend/.env`.
-3. Build the UI (`cd frontend; npm run build`) — FastAPI then serves it at `:8000`.
-4. Calibrate `PUMP_RATE_ML_S` / `DEAD_VOLUME_ML` against the real pump & tubing.
-5. Rotate the panel to landscape (see below), then launch Chromium in kiosk mode
-   pointing at `http://localhost:8000`.
-
-The UI/sim code is identical to dev — only the pump backend changes.
-
-### Display rotation (portrait panel → landscape)
-The panel is 720×1280 native; rotate the display **and the touch input** 90°.
-- **Wayland (Pi OS Bookworm default):** `wlr-randr --output DSI-1 --transform 90`
-  (touch follows the output automatically under labwc/wlroots). Persist it in the
-  compositor autostart.
-- **X11:** `xrandr --output DSI-1 --rotate right` **plus** a matching touch matrix
-  `xinput set-prop "<touch device>" "Coordinate Transformation Matrix" 0 1 0 -1 0 1 0 0 1`.
-
-Replace `DSI-1` with your actual output name (`wlr-randr` / `xrandr` lists it).
+## Deploy on the Pi (kiosk)
+Pi OS Bookworm Lite + `cage` (single-app Wayland kiosk) + systemd. Code via GitHub.
+```bash
+git clone <url> pi_pumpsim && cd pi_pumpsim
+deploy/install.sh        # apt deps, venv, build UI, install + enable services
+sudo reboot              # boots straight into the app, full-screen
+deploy/update.sh         # later: git pull → rebuild → restart
+```
+The UI/sim code is identical to dev — only `PUMP_BACKEND` flips to `real`.
+**Full guide (services, pump wiring, display+touch rotation, calibration):**
+[deploy/README.md](deploy/README.md).

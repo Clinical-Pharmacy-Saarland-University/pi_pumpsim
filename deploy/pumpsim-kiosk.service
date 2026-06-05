@@ -1,0 +1,30 @@
+# Template — install.sh substitutes __USER__ and __APP_DIR__ and installs this
+# to /etc/systemd/system/pumpsim-kiosk.service
+#
+# Runs the UI full-screen via `cage` (a single-app Wayland kiosk compositor) on
+# tty1. Waits for the backend to answer before launching Chromium.
+[Unit]
+Description=PumpSim kiosk (cage + Chromium)
+After=systemd-user-sessions.service getty@tty1.service pumpsim-backend.service
+Wants=pumpsim-backend.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=__USER__
+# PAMName=login gives this service a logind session + seat (DRM/input access)
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty1
+UtmpMode=user
+# block until the backend is serving, so Chromium never loads a dead page
+ExecStartPre=/bin/bash -c 'until curl -sf http://127.0.0.1:8000/api/state >/dev/null 2>&1; do sleep 1; done'
+ExecStart=/usr/bin/cage -- __APP_DIR__/deploy/kiosk.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

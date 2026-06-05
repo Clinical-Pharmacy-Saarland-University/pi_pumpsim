@@ -1,0 +1,21 @@
+# Template — install.sh substitutes __USER__ and __APP_DIR__ and installs this
+# to /etc/systemd/system/pumpsim-backend.service
+[Unit]
+Description=PumpSim backend (FastAPI/uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=gpio
+WorkingDirectory=__APP_DIR__/backend
+# GPIO backend for Raspberry Pi OS Bookworm (gpiozero picks lgpio)
+Environment=GPIOZERO_PIN_FACTORY=lgpio
+# App reads backend/.env itself (pydantic-settings) for PUMP_BACKEND, calibration, etc.
+ExecStart=__APP_DIR__/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
