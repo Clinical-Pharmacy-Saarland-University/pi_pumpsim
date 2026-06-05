@@ -6,9 +6,12 @@ the goal is to reach an **optimal dose** (a target window of water level).
 
 ## Hardware (target)
 - Raspberry Pi 4
-- 7" touchscreen
+- 7" touchscreen — **720×1280 native (portrait), mounted landscape ⇒ 1280×720** (display rotated 90°)
 - Peristaltic pump driven via GPIO pins
 - Tubing: water reservoir → pump → "person" avatar vessel
+
+> The UI is designed/verified for **1280×720 landscape**. It's responsive (and
+> stacks to a portrait layout if ever run portrait), but landscape is primary.
 
 ## Goals & constraints
 - **a)** Develop UI + logic *without* the Pi for the first iteration (run on a dev PC).
@@ -100,6 +103,17 @@ therapeutic range. All tunable live from the admin panel.
 2. Set `PUMP_BACKEND=real` and `PUMP_GPIO_PIN=<bcm>` in `backend/.env`.
 3. Build the UI (`cd frontend; npm run build`) — FastAPI then serves it at `:8000`.
 4. Calibrate `PUMP_RATE_ML_S` / `DEAD_VOLUME_ML` against the real pump & tubing.
-5. Launch Chromium in kiosk mode pointing at `http://localhost:8000`.
+5. Rotate the panel to landscape (see below), then launch Chromium in kiosk mode
+   pointing at `http://localhost:8000`.
 
 The UI/sim code is identical to dev — only the pump backend changes.
+
+### Display rotation (portrait panel → landscape)
+The panel is 720×1280 native; rotate the display **and the touch input** 90°.
+- **Wayland (Pi OS Bookworm default):** `wlr-randr --output DSI-1 --transform 90`
+  (touch follows the output automatically under labwc/wlroots). Persist it in the
+  compositor autostart.
+- **X11:** `xrandr --output DSI-1 --rotate right` **plus** a matching touch matrix
+  `xinput set-prop "<touch device>" "Coordinate Transformation Matrix" 0 1 0 -1 0 1 0 0 1`.
+
+Replace `DSI-1` with your actual output name (`wlr-randr` / `xrandr` lists it).
