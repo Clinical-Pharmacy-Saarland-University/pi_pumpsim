@@ -53,32 +53,32 @@ GND          ──► common between Pi and the driver supply
 `RealPump` already outputs **PWM** on `PUMP_GPIO_PIN`, so duty cycle = pump speed.
 Test with `PUMP_BACKEND=mock` on the real screen first, then switch to `real`.
 
-## Display rotation (portrait panel → landscape 1280×720)
-The panel is **720×1280 native**; rotate the framebuffer **and** the touch input
-90°. The exact lines depend on your panel/driver, so this is the one step that
-needs your specific hardware. General approach on Bookworm KMS:
+## Display + touch rotation — official Touch Display 2 (720×1280 → landscape)
+This panel is the **Raspberry Pi Touch Display 2** (connector `DSI-1`, overlay
+`vc4-kms-dsi-ili9881-7inch`). Its overlay rotates the **display *and* the touch
+input together at the kernel level** — perfect for a `cage` kiosk, since there's no
+desktop Screen Configuration tool involved.
 
-1. **Framebuffer** — `/boot/firmware/cmdline.txt`, append to the single line:
-   ```
-   video=DSI-1:720x1280@60,rotate=90
-   ```
-   (Use the real connector name from `wlr-randr` / the boot log; could be `DSI-1`,
-   `DSI-2`, or `HDMI-A-1`.)
+Add **one line** to `/boot/firmware/config.txt`:
+```ini
+# left landscape (90° clockwise)
+dtoverlay=vc4-kms-dsi-ili9881-7inch,rotation=90,swapxy,invx
+```
+…or, depending on which way you physically mount the panel:
+```ini
+# right landscape (270°)
+dtoverlay=vc4-kms-dsi-ili9881-7inch,rotation=270,swapxy,invy
+```
+`rotation=` turns the picture; `swapxy` / `invx` / `invy` align touch to it.
 
-2. **Touch** — rotate the touchscreen at the libinput level (compositor-agnostic,
-   works under cage) via a udev rule, e.g. `/etc/udev/rules.d/99-pumpsim-touch.rules`:
-   ```
-   ATTRS{name}=="<your touch device>", ENV{LIBINPUT_CALIBRATION_MATRIX}="0 1 0 -1 0 1"
-   ```
-   Find `<your touch device>` with `libinput list-devices`. The matrix above is for
-   one 90° direction; use `0 -1 1 1 0 0` for the other.
+**Reboot, then verify by tapping:**
+- Picture landscape the right way up? If upside-down/mirrored, swap `90` ↔ `270`.
+- Touch lands where you tap? If X is mirrored toggle `invx`; if Y, `invy`; if the
+  axes feel transposed, toggle `swapxy`.
 
-> Many 720×1280 DSI panels also support rotation directly in their device-tree
-> overlay (`dtoverlay=...,rotate=90`), which rotates display **and** touch together
-> — the cleanest option if your panel offers it.
-
-**Tell me the exact panel model + `libinput list-devices` output and I'll give you
-the precise rotate/matrix lines.**
+(`libinput list-devices` shows the touchscreen if you need to debug. The
+`cmdline.txt` `video=DSI-1:720x1280@60,rotate=90` trick only rotates the **text
+console** — it isn't needed for the kiosk; the overlay covers the Wayland session.)
 
 ## Operating
 ```bash
