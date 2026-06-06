@@ -16,9 +16,11 @@ Vite dev server** — just two systemd services.
 ## First install
 ```bash
 # on the Pi
-git clone <your-github-url> pi_pumpsim
+git clone https://github.com/Clinical-Pharmacy-Saarland-University/pi_pumpsim.git
 cd pi_pumpsim
 deploy/install.sh          # apt deps, venv, builds UI, installs + enables both services
+# rotate display + touch to landscape (Touch Display 2) — see "Display + touch rotation" below:
+echo 'dtoverlay=vc4-kms-dsi-ili9881-7inch,rotation=90,swapxy,invx' | sudo tee -a /boot/firmware/config.txt
 sudo reboot                # comes up in kiosk mode
 ```
 `install.sh` is idempotent-ish; safe to re-run. It defaults `PUMP_BACKEND=mock`

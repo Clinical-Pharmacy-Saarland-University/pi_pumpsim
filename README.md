@@ -100,8 +100,11 @@ therapeutic range. All tunable live from the admin panel.
 ## Deploy on the Pi (kiosk)
 Pi OS Bookworm Lite + `cage` (single-app Wayland kiosk) + systemd. Code via GitHub.
 ```bash
-git clone <url> pi_pumpsim && cd pi_pumpsim
+git clone https://github.com/Clinical-Pharmacy-Saarland-University/pi_pumpsim.git
+cd pi_pumpsim
 deploy/install.sh        # apt deps, venv, build UI, install + enable services
+# rotate the Touch Display 2 to landscape (display + touch):
+echo 'dtoverlay=vc4-kms-dsi-ili9881-7inch,rotation=90,swapxy,invx' | sudo tee -a /boot/firmware/config.txt
 sudo reboot              # boots straight into the app, full-screen
 deploy/update.sh         # later: git pull → rebuild → restart
 ```
