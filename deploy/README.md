@@ -1,13 +1,13 @@
 # Deploying pi_pumpsim on a Raspberry Pi (kiosk)
 
-Target: **Raspberry Pi OS Bookworm Lite (64-bit)** on a Pi 4, booting straight
-into the app full-screen via [`cage`](https://github.com/cage-kiosk/cage) (a
-single-app Wayland kiosk compositor). Code arrives via **GitHub** (`git clone` /
-`git pull`).
+Target: **Raspberry Pi OS Lite (64-bit, Bookworm or trixie)** on a Pi 4, booting
+straight into the app full-screen via [`sway`](https://swaywm.org/) (a Wayland
+compositor — it rotates the output to landscape, which `cage` cannot). Code arrives
+via **GitHub** (`git clone` / `git pull`).
 
 ```
 systemd ─ pumpsim-backend.service ─ uvicorn :8000 (serves the built UI + API/WS + GPIO)
-systemd ─ pumpsim-kiosk.service   ─ cage → Chromium --kiosk → http://127.0.0.1:8000
+systemd ─ pumpsim-kiosk.service   ─ sway (rotate→landscape) → Chromium --kiosk → :8000
 ```
 
 The backend serves the pre-built `frontend/dist`, so in production there is **no
@@ -19,9 +19,7 @@ Vite dev server** — just two systemd services.
 git clone https://github.com/Clinical-Pharmacy-Saarland-University/pi_pumpsim.git
 cd pi_pumpsim
 deploy/install.sh          # apt deps, venv, builds UI, installs + enables both services
-# rotate display + touch to landscape (Touch Display 2) — see "Display + touch rotation" below:
-echo 'dtoverlay=vc4-kms-dsi-ili9881-7inch,rotation=90,swapxy,invx' | sudo tee -a /boot/firmware/config.txt
-sudo reboot                # comes up in kiosk mode
+sudo reboot                # comes up in kiosk mode, landscape (sway rotates it)
 ```
 `install.sh` is idempotent-ish; safe to re-run. It defaults `PUMP_BACKEND=mock`
 so the very first boot drives nothing on the GPIO until you opt in.
@@ -55,38 +53,33 @@ GND          ──► common between Pi and the driver supply
 `RealPump` already outputs **PWM** on `PUMP_GPIO_PIN`, so duty cycle = pump speed.
 Test with `PUMP_BACKEND=mock` on the real screen first, then switch to `real`.
 
-## Display + touch rotation — official Touch Display 2 (720×1280 → landscape)
-This panel is the **Raspberry Pi Touch Display 2** (connector `DSI-1`, overlay
-`vc4-kms-dsi-ili9881-7inch`). Its overlay rotates the **display *and* the touch
-input together at the kernel level** — perfect for a `cage` kiosk, since there's no
-desktop Screen Configuration tool involved.
+## Display + touch rotation — handled by sway (Touch Display 2, 720×1280 → landscape)
+The Touch Display 2's native KMS mode is **720×1280 portrait**. We rotate in the
+compositor: **`sway` rotates the Wayland output, and the touch input follows the
+transform automatically** — so **no `/boot/firmware/config.txt` rotation is needed**
+(the `dtoverlay=…,rotation=…` approach only rotates the *console*, not the Wayland
+output, which is why `cage` showed the app sideways).
 
-Add **one line** to `/boot/firmware/config.txt`:
-```ini
-# left landscape (90° clockwise)
-dtoverlay=vc4-kms-dsi-ili9881-7inch,rotation=90,swapxy,invx
+`deploy/install.sh` writes `/etc/pumpsim/sway-kiosk.config` containing:
 ```
-…or, depending on which way you physically mount the panel:
-```ini
-# right landscape (270°)
-dtoverlay=vc4-kms-dsi-ili9881-7inch,rotation=270,swapxy,invy
+output * transform 90      # left landscape; use 270 for the other orientation
 ```
-`rotation=` turns the picture; `swapxy` / `invx` / `invy` align touch to it.
-
-**Reboot, then verify by tapping:**
-- Picture landscape the right way up? If upside-down/mirrored, swap `90` ↔ `270`.
-- Touch lands where you tap? If X is mirrored toggle `invx`; if Y, `invy`; if the
-  axes feel transposed, toggle `swapxy`.
-
-(`libinput list-devices` shows the touchscreen if you need to debug. The
-`cmdline.txt` `video=DSI-1:720x1280@60,rotate=90` trick only rotates the **text
-console** — it isn't needed for the kiosk; the overlay covers the Wayland session.)
+**If the picture is upside-down**, change `90` → `270` and restart the kiosk:
+```bash
+sudo sed -i 's/transform 90/transform 270/' /etc/pumpsim/sway-kiosk.config
+sudo systemctl restart pumpsim-kiosk
+```
+Touch always follows the picture (no separate touch calibration needed). If you ever
+added kernel rotation to `config.txt`, remove it so it doesn't fight sway:
+```bash
+sudo sed -i 's/,rotation=90,swapxy,invx//; s/,rotation=270,swapxy,invy//' /boot/firmware/config.txt
+```
 
 ## Operating
 ```bash
 systemctl status  pumpsim-backend pumpsim-kiosk
 journalctl -u pumpsim-backend -f         # backend logs
-journalctl -u pumpsim-kiosk   -f         # cage/Chromium logs
+journalctl -u pumpsim-kiosk   -f         # sway/Chromium logs
 sudo systemctl restart pumpsim-kiosk     # reload the UI
 ```
 

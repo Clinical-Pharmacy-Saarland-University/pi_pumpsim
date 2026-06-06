@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time install on a Raspberry Pi (Pi OS Bookworm Lite, 64-bit).
+# One-time install on a Raspberry Pi (Pi OS Lite 64-bit, Bookworm or trixie).
 # Run as your normal user from inside the cloned repo:  deploy/install.sh
 set -euo pipefail
 
@@ -16,9 +16,9 @@ echo "==> pi_pumpsim install"
 echo "    app dir: $APP_DIR"
 echo "    user:    $USER_NAME"
 
-echo "==> apt packages (cage, chromium, python, node)"
+echo "==> apt packages (sway, chromium, python, node)"
 sudo apt update
-sudo apt install -y cage python3-venv python3-pip curl nodejs npm
+sudo apt install -y sway python3-venv python3-pip curl nodejs npm
 # chromium package name varies by release: 'chromium' (Debian/Pi OS trixie+), 'chromium-browser' (older Bookworm)
 sudo apt install -y chromium || sudo apt install -y chromium-browser
 # GPIO libs for the real pump — prebuilt apt packages (no compiler/swig needed).
@@ -53,6 +53,10 @@ done
 rm -rf "$TMP"
 chmod +x "$APP_DIR/deploy/kiosk.sh"
 
+echo "==> install sway kiosk config (rotates the display to landscape)"
+sudo mkdir -p /etc/pumpsim
+sed "s|__APP_DIR__|$APP_DIR|g" "$APP_DIR/deploy/sway-kiosk.config" | sudo tee /etc/pumpsim/sway-kiosk.config >/dev/null
+
 sudo systemctl daemon-reload
 sudo systemctl enable pumpsim-backend.service pumpsim-kiosk.service
 
@@ -66,8 +70,11 @@ Next steps:
         PUMP_GPIO_PIN=<bcm pin to the driver>
      Leave PUMP_BACKEND=mock to safely test the UI on the screen first.
 
-  2. Display rotation (portrait panel -> landscape 1280x720):
-     panel-specific — see deploy/README.md  (do this before relying on touch).
+  2. The display + touch are rotated to landscape by sway
+     (output * transform 90 in /etc/pumpsim/sway-kiosk.config).
+     If the picture is upside-down, change 90 -> 270 there, then:
+        sudo systemctl restart pumpsim-kiosk
+     No /boot/firmware/config.txt rotation is needed (remove any you added).
 
   3. Start now (or just reboot — both services autostart):
         sudo systemctl start pumpsim-backend
