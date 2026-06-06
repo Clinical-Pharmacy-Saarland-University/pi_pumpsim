@@ -3,6 +3,7 @@ uvicorn[standard]>=0.30
 pydantic>=2.7
 pydantic-settings>=2.3
 
-# gpiozero is only needed on the Raspberry Pi (PUMP_BACKEND=real).
-# It is imported lazily, so it is NOT required on a dev PC.
-# On the Pi:  pip install gpiozero rpi-lgpio
+# gpiozero is only needed on the Raspberry Pi (PUMP_BACKEND=real). It is imported
+# lazily, so it is NOT required on a dev PC. On the Pi it comes from apt
+# (python3-gpiozero / python3-lgpio, prebuilt) via deploy/install.sh — the venv is
+# created with --system-site-packages so it can use them. No pip/compile needed.

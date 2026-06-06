@@ -21,16 +21,21 @@ sudo apt update
 sudo apt install -y cage python3-venv python3-pip curl nodejs npm
 # chromium package name varies by release: 'chromium' (Debian/Pi OS trixie+), 'chromium-browser' (older Bookworm)
 sudo apt install -y chromium || sudo apt install -y chromium-browser
+# GPIO libs for the real pump — prebuilt apt packages (no compiler/swig needed).
+# Only used when PUMP_BACKEND=real, so a failure here must not block the kiosk.
+sudo apt install -y python3-gpiozero python3-lgpio || echo "  (GPIO libs not installed — fine until you wire the pump)"
 
 echo "==> add $USER_NAME to gpio group"
 sudo usermod -aG gpio "$USER_NAME" || true
 
-echo "==> backend: venv + deps (+ Pi GPIO libs)"
+echo "==> backend: venv + deps"
 cd "$APP_DIR/backend"
-python3 -m venv .venv
+# --system-site-packages lets the venv use the apt-provided gpiozero/lgpio above
+# (avoids compiling lgpio from source). Recreated each install to ensure the flag.
+rm -rf .venv
+python3 -m venv --system-site-packages .venv
 ./.venv/bin/python -m pip install --upgrade pip
 ./.venv/bin/python -m pip install -r requirements.txt
-./.venv/bin/python -m pip install gpiozero lgpio
 [ -f .env ] || cp .env.example .env
 
 echo "==> frontend: build the UI bundle"
