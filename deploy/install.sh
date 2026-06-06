@@ -18,7 +18,9 @@ echo "    user:    $USER_NAME"
 
 echo "==> apt packages (cage, chromium, python, node)"
 sudo apt update
-sudo apt install -y cage chromium-browser python3-venv python3-pip curl nodejs npm
+sudo apt install -y cage python3-venv python3-pip curl nodejs npm
+# chromium package name varies by release: 'chromium' (Debian/Pi OS trixie+), 'chromium-browser' (older Bookworm)
+sudo apt install -y chromium || sudo apt install -y chromium-browser
 
 echo "==> add $USER_NAME to gpio group"
 sudo usermod -aG gpio "$USER_NAME" || true
