@@ -95,11 +95,11 @@
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border);
     border-radius: 24px;
-    padding: 30px 32px;
+    padding: 26px 30px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 16px;
+    justify-content: flex-start;
+    gap: 13px;
     align-items: flex-start;
     text-align: left;
     transition: transform 0.12s ease, box-shadow 0.25s ease, border-color 0.25s ease,
@@ -122,24 +122,24 @@
   .chip {
     display: grid;
     place-items: center;
-    width: 92px;
-    height: 92px;
-    border-radius: 24px;
-    font-size: 52px;
+    width: 86px;
+    height: 86px;
+    border-radius: 22px;
+    font-size: 48px;
     line-height: 1;
     background: color-mix(in srgb, var(--c) 24%, transparent);
     border: 1px solid color-mix(in srgb, var(--c) 48%, transparent);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
   }
   .title {
-    font-size: 30px;
+    font-size: 27px;
     font-weight: 800;
     line-height: 1.15;
   }
   .desc {
-    font-size: 19px;
+    font-size: 18px;
     color: var(--dim);
-    line-height: 1.5;
+    line-height: 1.45;
   }
 
   /* every card glows in its own story colour and invites a tap */
