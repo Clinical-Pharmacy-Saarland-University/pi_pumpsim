@@ -4,10 +4,9 @@
 </script>
 
 <button class="attract" onclick={onstart}>
-  <div class="logo">💧</div>
+  <div class="logo">💊</div>
   <h1>{t('app.title')}</h1>
-  <p class="tag">{t('attract.tagline')}</p>
-  <p class="fam">{t('attract.family')}</p>
+  <p class="tag">{t('app.subtitle')}</p>
   <div class="start">▶ {t('attract.start')}</div>
 </button>
 
@@ -20,29 +19,24 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 12px;
   }
   .logo {
-    font-size: 84px;
+    font-size: 80px;
     animation: float 3s ease-in-out infinite;
   }
   h1 {
-    font-size: 64px;
+    font-size: 60px;
     font-weight: 800;
     letter-spacing: 0.5px;
   }
   .tag {
-    font-size: 26px;
+    font-size: 22px;
     color: var(--green);
     font-weight: 700;
   }
-  .fam {
-    font-size: 18px;
-    color: var(--dim);
-    margin-top: 2px;
-  }
   .start {
-    margin-top: 34px;
+    margin-top: 30px;
     font-size: 22px;
     font-weight: 700;
     padding: 16px 32px;
@@ -59,7 +53,6 @@
   @keyframes pulse {
     50% {
       opacity: 0.55;
-      transform: scale(0.98);
     }
   }
 </style>

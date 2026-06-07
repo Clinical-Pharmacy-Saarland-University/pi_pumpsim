@@ -1,8 +1,8 @@
-import type { GameState, ScenarioMeta } from './types'
+import type { LevelState } from './types'
 
-/** Subscribe to live GameState over WebSocket. Auto-reconnects on drop. */
-export function connectTelemetry(
-  onMessage: (s: GameState) => void,
+/** Subscribe to live level state over WebSocket. Auto-reconnects. */
+export function connectLevel(
+  onMessage: (s: LevelState) => void,
   onStatus?: (connected: boolean) => void,
 ): () => void {
   let ws: WebSocket | null = null
@@ -13,7 +13,7 @@ export function connectTelemetry(
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     ws = new WebSocket(`${proto}://${location.host}/ws`)
     ws.onopen = () => onStatus?.(true)
-    ws.onmessage = (e) => onMessage(JSON.parse(e.data) as GameState)
+    ws.onmessage = (e) => onMessage(JSON.parse(e.data) as LevelState)
     ws.onclose = () => {
       onStatus?.(false)
       if (!closed) retry = setTimeout(open, 1000)
@@ -39,8 +39,7 @@ async function post(path: string, body?: unknown): Promise<unknown> {
 }
 
 export const api = {
-  scenarios: () => fetch('/api/scenarios').then((r) => r.json()) as Promise<ScenarioMeta[]>,
-  start: (scenario_id: string) => post('/api/game/start', { scenario_id }),
-  hold: (on: boolean) => post('/api/game/hold', { on }),
-  stop: () => post('/api/game/stop'),
+  /** Tell the torso to move toward `level` (0–100), optionally at a custom rate. */
+  setTarget: (level: number, rate?: number) => post('/api/level/target', { level, rate }),
+  reset: () => post('/api/level/reset'),
 }

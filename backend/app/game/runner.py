@@ -1,22 +1,18 @@
-"""GameRunner — ties the GameEngine to the pump and broadcasts state over WS.
-
-In mock mode the engine's computed level is the source of truth. On real hardware
-the pump is driven IN while holding; elimination (pump-out) is a later hardware
-concern — the open-loop level model stays authoritative.
+"""Async runner: ticks the LevelController, drives the pump toward the target,
+and broadcasts level state to WebSocket clients.
 """
 from __future__ import annotations
 
 import asyncio
 
 from ..hardware.pump import Pump
-from .engine import GameEngine
-from .scenarios import SCENARIOS, SCENARIO_BY_ID
+from .controller import LevelController
 
 
-class GameRunner:
+class LevelRunner:
     def __init__(self, pump: Pump, tick_hz: int) -> None:
         self.pump = pump
-        self.engine = GameEngine()
+        self.ctrl = LevelController()
         self.dt = 1.0 / max(1, tick_hz)
         self._listeners: set[asyncio.Queue] = set()
         self._task: asyncio.Task | None = None
@@ -35,51 +31,29 @@ class GameRunner:
         self.pump.close()
 
     # --- commands ---
-    def start_round(self, scenario_id: str) -> None:
-        self.engine.start(SCENARIO_BY_ID[scenario_id])
+    def set_target(self, level: float, rate: float | None = None) -> None:
+        self.ctrl.set_target(level, rate)
+
+    def reset(self) -> None:
+        self.ctrl.reset(immediate=True)
         self.pump.stop()
-
-    def set_hold(self, on: bool) -> None:
-        self.engine.set_hold(on)
-        # drive the physical pump IN while the player holds
-        if on and self.engine.phase == "running":
-            self.pump.start()
-        else:
-            self.pump.stop()
-
-    def stop_round(self) -> None:
-        self.engine.stop()
-        self.pump.stop()
-
-    @staticmethod
-    def scenarios() -> list[dict]:
-        return [
-            {
-                "id": s.id,
-                "patient_id": s.patient_id,
-                "drug_id": s.drug_id,
-                "band_low": s.band_low,
-                "band_high": s.band_high,
-                "duration": s.duration,
-                "tutorial": s.tutorial,
-                "events": [{"t": e.t, "type": e.type} for e in s.events],
-            }
-            for s in SCENARIOS
-        ]
 
     # --- loop ---
     async def _loop(self) -> None:
         while True:
-            was_running = self.engine.phase == "running"
-            self.engine.tick(self.dt)
-            if was_running and self.engine.phase == "ended":
-                self.pump.stop()  # round over → stop dosing
+            self.ctrl.tick(self.dt)
+            # drive the pump toward the target (mock: just reflects motion;
+            # the IBT-2 RealPump will map direction -> in/out)
+            if self.ctrl.direction == "stop":
+                self.pump.stop()
+            else:
+                self.pump.start()
             self._broadcast()
             await asyncio.sleep(self.dt)
 
     # --- telemetry ---
     def snapshot(self) -> dict:
-        snap = self.engine.snapshot()
+        snap = self.ctrl.snapshot()
         snap["pump_running"] = self.pump.is_running
         return snap
 

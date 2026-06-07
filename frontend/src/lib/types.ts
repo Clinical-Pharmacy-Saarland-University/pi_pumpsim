@@ -1,32 +1,18 @@
-export type Phase = 'idle' | 'running' | 'ended'
+export type Zone = 'critical_low' | 'under' | 'in' | 'over' | 'critical_high'
 
-export interface GameState {
-  phase: Phase
-  scenario_id: string | null
-  t: number
-  duration: number
+// live state from the backend "torso twin"
+export interface LevelState {
   level: number
+  target: number
+  moving: boolean
+  direction: 'in' | 'out' | 'stop'
+  zone: Zone
+  in_band: boolean
   capacity: number
+  baseline: number
   band_low: number
   band_high: number
-  in_green: boolean
-  well_being: number
-  time_in_green: number
-  green_pct: number
-  hold: boolean
-  k_mult: number
-  active_event: string | null
-  stars: number
+  critical_high: number
+  critical_low: number
   pump_running: boolean
-}
-
-export interface ScenarioMeta {
-  id: string
-  patient_id: string
-  drug_id: string
-  band_low: number
-  band_high: number
-  duration: number
-  tutorial: boolean
-  events: { t: number; type: string }[]
 }

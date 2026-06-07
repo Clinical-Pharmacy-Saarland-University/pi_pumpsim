@@ -1,18 +1,9 @@
 <script lang="ts">
   import { t } from '../locale'
-  import type { GameState, ScenarioMeta } from '../types'
+  import { game } from '../game.svelte'
+  import { api } from '../api'
 
-  let {
-    state,
-    scenarios,
-    onjump,
-    onclose,
-  }: {
-    state: GameState | null
-    scenarios: ScenarioMeta[]
-    onjump: (id: string) => void
-    onclose: () => void
-  } = $props()
+  let { onclose }: { onclose: () => void } = $props()
 </script>
 
 <aside class="admin">
@@ -20,15 +11,14 @@
     <h2>{t('admin.title')}</h2>
     <button class="x" onclick={onclose} aria-label="schließen">✕</button>
   </header>
-
-  <div class="jump">
-    {#each scenarios as s}
-      <button onclick={() => onjump(s.id)}>{s.id} · {t('p.' + s.patient_id + '.name')}</button>
-    {/each}
+  <div class="row">
+    <button onclick={() => api.reset()}>Reset Spiegel</button>
+    <button onclick={() => api.setTarget(62)}>→ 62 (Band)</button>
+    <button onclick={() => api.setTarget(78)}>→ 78 (toxic)</button>
   </div>
-
-  <pre>{state ? JSON.stringify(state, null, 2) : '—'}</pre>
-  <footer>Taste <kbd>A</kbd> / <kbd>Esc</kbd> schließt · {state?.pump_running ? 'Pumpe AN' : 'Pumpe aus'}</footer>
+  <div class="meta">Phase: <b>{game.phase}</b> · Event {game.idx + 1}/{game.events.length || '-'}</div>
+  <pre>{game.level ? JSON.stringify(game.level, null, 2) : '—'}</pre>
+  <footer>Taste <kbd>A</kbd> / <kbd>Esc</kbd> schließt</footer>
 </aside>
 
 <style>
@@ -63,17 +53,21 @@
     width: 38px;
     height: 38px;
   }
-  .jump {
+  .row {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
   }
-  .jump button {
+  .row button {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 8px 14px;
+    padding: 8px 12px;
     font-weight: 600;
+  }
+  .meta {
+    font-size: 13px;
+    color: var(--dim);
   }
   pre {
     margin: 0;
@@ -82,10 +76,8 @@
     border-radius: 10px;
     padding: 10px;
     font-size: 11px;
-    line-height: 1.5;
     color: var(--dim);
     white-space: pre-wrap;
-    word-break: break-word;
   }
   footer {
     margin-top: auto;

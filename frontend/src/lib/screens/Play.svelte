@@ -1,221 +1,183 @@
 <script lang="ts">
   import { t } from '../locale'
-  import Gauge from '../Gauge.svelte'
-  import PatientFace from '../PatientFace.svelte'
-  import Mascot from '../Mascot.svelte'
-  import HoldButton from '../HoldButton.svelte'
-  import type { GameState, ScenarioMeta } from '../types'
+  import TorsoBar from '../TorsoBar.svelte'
+  import {
+    game,
+    chooseDose,
+    holdStart,
+    holdStop,
+    startEvents,
+    toKnowledge,
+    answerKnowledge,
+    toDecision,
+    choose,
+  } from '../game.svelte'
 
-  let {
-    state,
-    scenario,
-    index,
-    total,
-    onhold,
-  }: {
-    state: GameState
-    scenario: ScenarioMeta
-    index: number
-    total: number
-    onhold: (on: boolean) => void
-  } = $props()
-
-  let name = $derived(t('p.' + scenario.patient_id + '.name'))
-  let line = $derived(t('p.' + scenario.patient_id + '.line'))
-  let remaining = $derived(Math.max(0, state.duration - state.t))
-  let mood = $derived<'happy' | 'low' | 'high'>(
-    state.in_green ? 'happy' : state.level < state.band_low ? 'low' : 'high',
-  )
-  let statusText = $derived(
-    state.in_green ? t('status.in') : state.level < state.band_low ? t('status.low') : t('status.high'),
+  let ev = $derived(game.events[game.idx])
+  let doseStatus = $derived(
+    game.level?.zone === 'in'
+      ? { key: 'dose.settled.in', cls: 'good' }
+      : game.level && game.level.level > game.level.band_high
+        ? { key: 'dose.settled.over', cls: 'bad' }
+        : { key: 'dose.settled.under', cls: 'warn' },
   )
 
-  function fmt(s: number) {
-    const x = Math.ceil(s)
-    return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, '0')}`
+  function holdDown(e: PointerEvent) {
+    e.preventDefault()
+    holdStart()
   }
 </script>
 
-<div class="play">
-  <div class="top">
-    <div class="who">
-      <span class="pill">{t('intro.patientOf', { n: index + 1, total })}</span>
-      <h1>{line}</h1>
-    </div>
-    <div class="timer">{fmt(remaining)}</div>
+<div class="screen">
+  <div class="panel">
+    {#if game.phase === 'dose'}
+      <h2>{t('dose.prompt')}</h2>
+      <div class="row">
+        <button class="btn" onclick={() => chooseDose('low')}>{t('dose.low')}</button>
+        <button class="btn" onclick={() => chooseDose('standard')}>{t('dose.standard')}</button>
+        <button class="btn" onclick={() => chooseDose('high')}>{t('dose.high')}</button>
+      </div>
+      <button
+        class="hold"
+        onpointerdown={holdDown}
+        onpointerup={holdStop}
+        onpointerleave={holdStop}
+        onpointercancel={holdStop}>{t('dose.hold')}</button
+      >
+      <p class="hint">{t('dose.arcadeHint')}</p>
+    {:else if game.phase === 'dosing' || game.phase === 'settling'}
+      <div class="dots">…</div>
+    {:else if game.phase === 'doseDone'}
+      <div class="status {doseStatus.cls}">{t(doseStatus.key)}</div>
+      <p class="time">{t('timejump')}</p>
+      <button class="btn primary" onclick={startEvents}>{t('common.next')}</button>
+    {:else if game.phase === 'story'}
+      <div class="icon">{ev.icon}</div>
+      <p class="story">{t(ev.storyKey)}</p>
+      <button class="btn primary" onclick={toKnowledge}>{t('common.next')}</button>
+    {:else if game.phase === 'knowledge'}
+      <h2>{t(ev.knowledge.promptKey)}</h2>
+      <div class="col">
+        {#each ev.knowledge.options as o}
+          <button class="btn" onclick={() => answerKnowledge(o.id)}>{t(o.labelKey)}</button>
+        {/each}
+      </div>
+    {:else if game.phase === 'lesson'}
+      <div class="fb {game.lastCorrect ? 'good' : 'bad'}">
+        {game.lastCorrect ? t('q.correct') : t('q.wrong')}
+      </div>
+      <p class="story">{t(ev.knowledge.lessonKey)}</p>
+      <button class="btn primary" onclick={toDecision}>{t('common.next')}</button>
+    {:else if game.phase === 'decision'}
+      <h2>{t(ev.decisionPromptKey)}</h2>
+      <div class="col">
+        {#each ev.choices as c}
+          <button class="btn" onclick={() => choose(c)}>{t(c.labelKey)}</button>
+        {/each}
+      </div>
+    {/if}
   </div>
 
-  {#if state.active_event}
-    <div class="banner">
-      {t('ev.' + state.active_event, { name })}
-      <span class="sub">{t('ev.' + state.active_event + '.sub')}</span>
-    </div>
-  {/if}
-
-  <div class="stage">
-    <div class="patient" class:good={state.in_green}>
-      <div class="facebox"><PatientFace {mood} /></div>
-      <div class="pname">{name}</div>
-      <Mascot drugId={scenario.drug_id} size={54} />
-      <div class="wb">
-        <div class="lbl">{t('play.wellbeing')}</div>
-        <div class="bar"><div class="fill" style="width:{state.well_being}%"></div></div>
-      </div>
-      <div class="status {mood}">
-        {statusText} <span>· {t('play.inGreenFor', { s: Math.floor(state.time_in_green) })}</span>
-      </div>
-    </div>
-
-    <div class="gaugecol">
-      <Gauge
-        level={state.level}
-        capacity={state.capacity}
-        bandLow={state.band_low}
-        bandHigh={state.band_high}
-        inGreen={state.in_green}
-      />
-    </div>
+  <div class="bar">
+    {#if game.level}<TorsoBar s={game.level} />{/if}
   </div>
-
-  <div class="holdwrap"><HoldButton {onhold} /></div>
 </div>
 
 <style>
-  .play {
+  .screen {
     height: 100vh;
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: clamp(20px, 4vw, 48px);
+    align-items: center;
+    padding: 24px clamp(20px, 4vw, 48px);
+  }
+  .panel {
     display: flex;
     flex-direction: column;
-    padding: 22px clamp(20px, 3vw, 40px);
-    gap: 14px;
+    gap: 16px;
+    align-items: flex-start;
+    min-width: 0;
   }
-  .top {
+  h2 {
+    font-size: 28px;
+    font-weight: 800;
+  }
+  .row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
   }
-  .who {
+  .col {
     display: flex;
-    align-items: center;
-    gap: 14px;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 520px;
   }
-  .pill {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 7px 14px;
+  .col .btn {
+    text-align: left;
+  }
+  .icon {
+    font-size: 56px;
+  }
+  .story {
+    font-size: 22px;
+    line-height: 1.5;
+    max-width: 560px;
+  }
+  .hint {
     font-size: 14px;
     color: var(--dim);
   }
-  h1 {
-    font-size: 24px;
-    font-weight: 700;
-  }
-  .timer {
-    font-variant-numeric: tabular-nums;
-    font-size: 22px;
-    font-weight: 700;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 6px 14px;
-  }
-  .banner {
-    align-self: center;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: linear-gradient(90deg, rgba(255, 183, 3, 0.22), rgba(255, 183, 3, 0.08));
-    border: 1px solid rgba(255, 183, 3, 0.5);
-    border-radius: 16px;
-    padding: 11px 22px;
-    font-size: 20px;
-    font-weight: 700;
-  }
-  .banner .sub {
-    font-size: 15px;
-    font-weight: 500;
+  .time {
+    font-size: 16px;
     color: var(--dim);
-  }
-  .stage {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1.05fr 0.95fr;
-    gap: clamp(20px, 4vw, 48px);
-    align-items: center;
-    min-height: 0;
-  }
-  .patient {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 24px;
-    padding: 22px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    box-shadow: var(--shadow);
-    transition: border-color 0.3s ease, background 0.3s ease;
-  }
-  .patient.good {
-    border-color: rgba(56, 224, 160, 0.5);
-    background: rgba(56, 224, 160, 0.06);
-  }
-  .facebox {
-    width: 120px;
-    height: 120px;
-  }
-  .pname {
-    font-size: 24px;
-    font-weight: 800;
-  }
-  .wb {
-    width: 100%;
-  }
-  .wb .lbl {
-    font-size: 12px;
-    color: var(--dim);
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    margin-bottom: 6px;
-  }
-  .wb .bar {
-    height: 14px;
-    border-radius: 999px;
-    background: var(--surface2);
-    overflow: hidden;
-    border: 1px solid var(--border);
-  }
-  .wb .fill {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, var(--green), #8be0c0);
-    transition: width 0.12s linear;
   }
   .status {
-    font-size: 18px;
-    font-weight: 700;
+    font-size: 26px;
+    font-weight: 800;
   }
-  .status span {
-    color: var(--dim);
-    font-weight: 500;
-    font-size: 15px;
-  }
-  .status.happy {
+  .status.good,
+  .fb.good {
     color: var(--green);
   }
-  .status.low {
+  .status.warn {
     color: var(--grape);
   }
-  .status.high {
+  .status.bad,
+  .fb.bad {
     color: var(--toxic);
   }
-  .gaugecol {
-    display: flex;
-    justify-content: center;
+  .fb {
+    font-size: 22px;
+    font-weight: 800;
   }
-  .holdwrap {
+  .dots {
+    font-size: 48px;
+    color: var(--dim);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+  .hold {
+    background: linear-gradient(135deg, var(--water-top), var(--water-bot));
+    border-radius: 16px;
+    padding: 18px 40px;
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+    touch-action: none;
+  }
+  .hold:active {
+    transform: scale(0.97);
+  }
+  .bar {
+    height: 84vh;
     display: flex;
     justify-content: center;
-    padding-top: 4px;
   }
 </style>
