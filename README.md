@@ -7,7 +7,7 @@ the goal is to reach an **optimal dose** (a target window of water level).
 ## Hardware (target)
 - Raspberry Pi 4
 - **Raspberry Pi Touch Display 2** (7", 720×1280 native portrait), mounted **landscape ⇒ 1280×720** (rotated 90° via the `vc4-kms-dsi-ili9881-7inch` overlay)
-- Peristaltic pump driven via GPIO pins
+- Reversible peristaltic pump via an **IBT-2 (BTS7960) H-bridge** (RPWM/LPWM + enables; external motor supply). Wiring + cable colours in [deploy/README.md](deploy/README.md#-pump-wiring--ibt-2-bts7960-h-bridge-dont-skip).
 - Tubing: water reservoir → pump → "person" avatar vessel
 
 > The UI is designed/verified for **1280×720 landscape**. It's responsive (and

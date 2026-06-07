@@ -41,17 +41,43 @@ Copied from `backend/.env.example` on install. Key fields:
 After editing: `sudo systemctl restart pumpsim-backend`.
 (Calibration is also live-editable from the on-screen admin panel — press `A`.)
 
-## ⚠️ Pump wiring (don't skip)
-A GPIO pin **cannot** drive the pump motor directly. Put a driver in between:
+## ⚠️ Pump wiring — IBT-2 (BTS7960) H-bridge (don't skip)
+The pump is a reversible DC motor driven by an **IBT-2** H-bridge. The Pi provides
+**logic signals only** — the motor runs off its **own external supply**. Direction is
+set by *which* PWM input you drive (RPWM vs LPWM); both enables are held high.
 
+**Signal side — IBT-2 → Raspberry Pi** (with our cable colours):
+
+| IBT-2 pin | wire colour | Raspberry Pi (BCM / physical) |
+|---|---|---|
+| VCC  | 🔴 red    | **5V**  (pin 2)   |
+| GND  | ⚫ black  | **GND** (pin 6) — common ground |
+| RPWM | 🟢 green  | **GPIO12** (pin 32, PWM0) |
+| LPWM | ⚪ white  | **GPIO13** (pin 33, PWM1) |
+| R_EN | 🔵 blue   | **GPIO23** (pin 16) |
+| L_EN | 🟡 yellow | **GPIO24** (pin 18) |
+| R_IS / L_IS | — | leave unconnected |
+
+**Power side — IBT-2:**
+
+| IBT-2 terminal | connect to |
+|---|---|
+| B+ | external pump supply **+** |
+| B− | external pump supply **−** |
+| M+ / M− | the two **pump motor** wires |
+
+Notes:
+- On the IBT-2, logic `GND` and power `B−` are tied on the board, so Pi GND + supply−
+  give a shared reference. Common ground is essential.
+- 3.3 V GPIO into a 5 V-VCC IBT-2 normally works; if it's flaky, move VCC to **3.3 V** (pin 1).
+- These pins are the defaults in `tools/pump_test.py` and (will be) `RealPump`'s
+  `PUMP_RPWM_PIN` / `PUMP_LPWM_PIN` / `PUMP_REN_PIN` / `PUMP_LEN_PIN`.
+
+**Bench-test it first** (independent of the game):
+```bash
+python3 tools/pump_test.py     # → open http://pumpsim.local:8001, drive IN/OUT + speed
 ```
-GPIO PWM pin ──► MOSFET gate / motor-driver IN / relay
-pump motor   ──► driver output, on its own 5–12 V supply
-             ──► flyback diode across the motor
-GND          ──► common between Pi and the driver supply
-```
-`RealPump` already outputs **PWM** on `PUMP_GPIO_PIN`, so duty cycle = pump speed.
-Test with `PUMP_BACKEND=mock` on the real screen first, then switch to `real`.
+Then run the game with `PUMP_BACKEND=mock` on the real screen before switching to `real`.
 
 ## Display + touch rotation — handled by sway (Touch Display 2, 720×1280 → landscape)
 The Touch Display 2's native KMS mode is **720×1280 portrait**. We rotate in the
