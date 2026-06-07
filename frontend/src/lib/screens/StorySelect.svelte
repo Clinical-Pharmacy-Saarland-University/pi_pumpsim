@@ -9,7 +9,7 @@
   <Backdrop />
 
   <header>
-    <button class="back" onclick={back}>← {t('common.back')}</button>
+    <button class="back" onclick={back}><span class="arrow">←</span>{t('common.back')}</button>
     <h1>{t('stories.title')}</h1>
     <div class="spacer"></div>
   </header>
@@ -67,6 +67,13 @@
     border-color: var(--spm-cyan);
     transform: scale(0.96);
   }
+  .arrow {
+    display: inline-block;
+  }
+  /* the back arrow points the other way in RTL (.pi gets dir="rtl") */
+  :global([dir='rtl']) .arrow {
+    transform: scaleX(-1);
+  }
   h1 {
     font-weight: 900;
     text-align: center;
@@ -101,7 +108,7 @@
     justify-content: flex-start;
     gap: 13px;
     align-items: flex-start;
-    text-align: left;
+    text-align: start;
     transition: transform 0.12s ease, box-shadow 0.25s ease, border-color 0.25s ease,
       background 0.2s ease;
     animation: cardin 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both;
@@ -111,7 +118,7 @@
   /* big faded icon for depth, tinted by the story colour */
   .watermark {
     position: absolute;
-    right: -18px;
+    inset-inline-end: -18px;
     bottom: -34px;
     font-size: 190px;
     line-height: 1;
@@ -156,7 +163,7 @@
   .badge {
     position: absolute;
     top: 16px;
-    right: 16px;
+    inset-inline-end: 16px;
   }
   .badge.play {
     display: grid;

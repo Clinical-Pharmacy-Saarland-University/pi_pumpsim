@@ -233,7 +233,7 @@
   .check {
     position: absolute;
     top: 8px;
-    right: 9px;
+    inset-inline-end: 9px;
     width: 22px;
     height: 22px;
     border-radius: 50%;

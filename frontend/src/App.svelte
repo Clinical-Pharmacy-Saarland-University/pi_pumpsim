@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { game, init } from './lib/game.svelte'
+  import { i18n } from './lib/locale.svelte'
   import MiniBar from './lib/MiniBar.svelte'
   import Start from './lib/screens/Start.svelte'
   import StorySelect from './lib/screens/StorySelect.svelte'
@@ -15,6 +16,8 @@
   let vw = $state(1280)
   let vh = $state(720)
   let framed = $derived(!(vw === 1280 && vh === 720))
+  // Arabic reads right-to-left; flip the whole game frame for the ar locale.
+  let dir = $derived<'ltr' | 'rtl'>(i18n.locale === 'ar' ? 'rtl' : 'ltr')
 
   function fit() {
     vw = window.innerWidth
@@ -57,7 +60,7 @@
 
 <div class="device">
   {#if framed}<div class="label">Raspberry Pi · Touch Display 2 · 1280 × 720</div>{/if}
-  <div class="pi" class:framed style="transform: scale({scale})">
+  <div class="pi" class:framed {dir} style="transform: scale({scale})">
     {#if game.phase === 'start'}
       <Start onadmin={() => (showAdmin = true)} />
     {:else if game.phase === 'storyselect'}
