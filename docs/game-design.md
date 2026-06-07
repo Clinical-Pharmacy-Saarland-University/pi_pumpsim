@@ -1,11 +1,12 @@
-# PumpSim — Game Design (v0.5)
+# PumpSim — Game Design (v0.6)
 
-> Living document. Status: **build-ready** — „Dr. Dosis", mixed/all ages, **dark** theme,
-> hold-to-infuse, 3-round **„Hilf der Familie!"** arc (Para → Sim+🍊 → Meto/CYP2D6),
-> real drugs + mascot pills, plain-words-with-term-in-brackets, German „du".
-> Refined: flow & wireframes (§14), art direction (§15), scenarios & PK (§16), copy (§17).
-> Concept brainstorm kept for reference in §1–§11; build slice in §13.
-> UI language: **German first**, built i18n-ready (English later).
+> Living document. **Status: v0.6 redesign — see §18 (current).**
+> Context: a university **„Tag der offenen Tür"**, theme **SafePolyMed** (safe
+> polymedication): drug–drug, food–drug, and drug–gene interactions.
+> Core loop changed from twitch-balancing to a **decision game with a slow physical
+> reveal** (real pump is slow; the therapeutic window is a **fixed taped band**).
+> §1–§17 are earlier iterations kept for reference; **§18 supersedes the v0.5 loop**.
+> UI language: **German first**, i18n-ready.
 
 ## 1. The setup as a design asset
 - **Translucent 3D-printed upper body (~2–3 L)** filled with **dyed water** by a pump
@@ -499,3 +500,138 @@ Alternative: keep kid drugs (Paracetamol/Ibuprofen) with **simplified** effects 
 ### German wording
 „du"-Ansprache used throughout. Open to your edits on any phrasing.
 
+
+---
+
+## 18. v0.6 — open-day "SafePolyMed" decision game (CURRENT)
+
+**Context.** University *Tag der offenen Tür*. Theme **SafePolyMed** — safe
+polymedication: **DDI** (drug–drug), **FDI** (food–drug), **DGI** (drug–gene)
+interactions. Audience: general public, with student/staff presenters.
+
+**Constraints that reshaped the design.**
+1. Real pump is **slow** (big torso) — no fast fills → twitch-balancing is out.
+2. The therapeutic window is a **fixed taped band** on the torso → *same band for every
+   scenario*; only the drug/story/interaction changes.
+3. Needs **stories + interaction** (questions, buttons).
+4. Must be possible to **lose**.
+5. Must teach **gene + polymedication** (Johanniskraut, grapefruit, …), educational.
+6. "Cool story" with question/button interactions.
+
+### The reframe — slowness becomes the drama
+A patient sits **inside** the fixed band. An interaction is introduced and the level
+**slowly drifts toward a danger line**; the player must make the **right decision** to
+stop it before it crosses. Slow = suspense + thinking time. Movements stay **small**
+(action happens *around* the band), so the slow pump is fine.
+
+- **Screen = the whole game** (story, questions, buttons, the level bar). Full-screen.
+- **Torso = digital twin**: an on-screen **vertical bar** with the fixed band marked,
+  moving at the **realistic slow pump speed**. In dev it's the only view; on hardware the
+  real torso mirrors it. (So the entire game is build/test-able on screen, no Pi needed.)
+
+### Core loop (v0.6)
+1. **Briefing** — patient + *Medikationsplan*; the band = therapeutic window
+   („zu wenig = wirkt nicht · zu viel = gefährlich"). Reset: bar pre-filled to a baseline
+   just **below** the band (small/fast).
+2. **Initial dose** — buttons (niedrig / standard / hoch) set a target; the bar rises into
+   the band → patient „eingestellt".
+3. **Interaction event(s)** — each a little story:
+   - **Setup** (story) → **knowledge question** (buttons) → short **mechanism lesson**.
+   - The level begins a **slow drift** toward a danger tape.
+   - **Decision** (buttons): the right call halts/reverses the drift in time; wrong/late → it
+     keeps going.
+4. **Outcome / you can lose**: end **in band** → ✅ win; **over the top tape** → ❌ overdose;
+   **below the bottom tape** → ❌ ineffective; hitting a **critical line** → immediate loss.
+   Stars by centredness + correct answers. Quick retry.
+
+### Level model (normalized 0–100, the engine)
+- **Fixed band** `[55, 70]` (same every scenario). Baseline (reset) ≈ `40`.
+  Critical-high `≈ 80` (severe toxic → instant loss). Critical-low `≈ 45` (useless).
+- **Dose → base target**: niedrig `≈ 50`, standard `≈ 62`, hoch `≈ 74`.
+- **Interaction factor**: multiplies the effective target. Inhibitor (grapefruit) `×1.22`
+  (raises), inducer (Johanniskraut) `×0.8` (lowers), DGI poor-metaboliser `×1.3`, etc.
+- `target = base_dose × Π(factors)`, clamped. The bar **moves toward target at the slow
+  pump rate**. Decisions change `base_dose` or remove a factor → target shifts → drift.
+- Outcome evaluated when events resolve + level settles (or instant loss at a critical line).
+
+### Scenario 1 (flagship to build) — „Die Grapefruit-Falle"
+Patient **Herr Schmidt, 68 — Simvastatin** (Cholesterin). Textbook CYP3A4 + grapefruit;
+relatable; both failure modes.
+
+| step | level effect | German copy |
+|---|---|---|
+| Briefing | bar at baseline 40 | „Herr Schmidt, 68 – zu hohes Cholesterin. Stell ihn mit **Simvastatin** sicher ein." |
+| Dose: **standard** ✓ | target 62 → into band | „Welche Dosis?" [niedrig / **standard** / hoch] → „Im grünen Bereich – gut eingestellt!" |
+| Event 🍊 | — | „Herr Schmidt trinkt jeden Morgen ein großes Glas **Grapefruitsaft**." |
+| Knowledge Q | — | „Was passiert mit dem Simvastatin-Spiegel?" [**steigt** ✓ / sinkt / bleibt gleich] |
+| Lesson | factor ×1.22 → target ≈ 76, bar **drifts up** toward toxic | „Grapefruit hemmt das Abbau-Enzym **CYP3A4** – der Wirkstoff sammelt sich an." |
+| Decision | | „Wie reagierst du?" |
+| → Dosis reduzieren ✓ | base 50 → 50×1.22 ≈ 61 (band) | win path |
+| → Grapefruit weglassen ✓ | factor removed → 62 (band) | win path |
+| → nichts ändern ✗ | stays ≈ 76 (toxic) | lose |
+| → Dosis erhöhen ✗✗ | 74×1.22 ≈ 90 (critical) | instant lose |
+| Outcome ✅ | in band | „Sicher eingestellt! 🎉" + stars |
+| Outcome ❌ over | > 70 / critical | „Zu viel Simvastatin → Muskelschäden (Rhabdomyolyse). ⚠️" |
+| Outcome ❌ under | < 55 | „Zu wenig Wirkstoff → das Cholesterin bleibt hoch." |
+| Wusstest du? | | „Grapefruitsaft kann den Abbau **vieler** Medikamente bremsen – eine echte Nahrungs-Wechselwirkung." |
+
+### Scenario template → the other SafePolyMed scenarios (same engine, new content)
+A scenario = `{ patient, drug, Medikationsplan, doseOptions, events:[ { story,
+knowledgeQ, factor, lesson, decisions:[{label, Δbase|removeFactor, correct}] } ],
+outcomes }`. Then:
+- **FDI** — Grapefruit (×1.22 ↑) — *Scenario 1*.
+- **Herb/DDI induction** — **Johanniskraut** (×0.8 ↓ → efficacy loss; e.g. „die Pille wirkt
+  nicht mehr", or anticoagulant/immunsuppressivum).
+- **DGI (Gene)** — *Metabolisierer-Status* (e.g. Codein + CYP2D6: same dose, ×1.3 poor →
+  toxic, or ×0.6 ultra-rapid → no effect).
+- **DDI / Polymedikation** — a second drug added to the *Medikationsplan* interacts.
+
+### Win/lose & scoring
+- **Win** = end inside the band. **Lose** = end out of band, or hit a critical line.
+- Loss shows a memorable consequence (Rhabdomyolyse / kein Schutz) + the lesson; easy retry.
+- Stars: centredness + correct knowledge answers + correct decision. Optional session
+  high-score board for the open day.
+
+### Locked decisions (v0.6)
+- **Input = discrete buttons** (dose: niedrig/standard/hoch; decisions: labelled choices).
+  **Arcade dosing = optional**: hold-to-fill + stop-in-the-green as an alternative dose
+  mechanic (and for the "drain back" correction). Buttons are the inclusive default.
+- **Structure = hybrid event pool.** Each interaction is an **authored event**; a play =
+  a patient + **1–3 events drawn & shuffled** from the pool, with randomised
+  magnitude / answer-order / metaboliser trait. Recognisable beats, never identical.
+- **Drift = gentle** (always time to read); you **lose by a wrong choice or a bad final
+  level**, not by a clock. (A hard "critical line" still gives an instant dramatic loss.)
+- Title/branding: „Dr. Dosis" vs SafePolyMed-branded — TBD.
+
+### Session walkthrough (the full beat list — Herr Schmidt / grapefruit)
+0 Start → 1 Briefing (patient + band) → 2 Dosis (buttons *or* arcade fill-stop) →
+3 „eine Woche später" → 4 Event (story) → 4a Wissensfrage (+lesson) → 4b slow drift →
+5 Reagieren (decision) → 6 Outcome (win / lose). See the table in this section.
+
+### Event-authoring schema (the pool)
+```
+Event = {
+  id, type: 'FDI'|'DDI'|'DGI'|'distractor',
+  story,                         // DE setup line(s)
+  knowledgeQ: { prompt, options[], correct, lesson },   // optional
+  effect: { factor } | { removeFactor } | { none },     // what it does to the level
+  decision: { prompt, options:[ { label, apply, correct } ] },
+  icon,
+}
+```
+Starter pool:
+- `grapefruit` (FDI, ×1.22 ↑) — **flagship/Scenario 1**.
+- `johanniskraut` (induction, ×0.8 ↓ → efficacy loss).
+- `gene_poor` / `gene_fast` (DGI trait, ×1.3 / ×0.6) — set at briefing, shifts correct dose.
+- `second_drug_inhibitor` / `_inducer` (DDI / polymed).
+- `apfel` / `wasser` (**distractor**, no effect → correct decision = *nichts ändern*; teaches
+  discernment + replay variety).
+
+### Randomness points (replayability)
+which event(s) fire · order · magnitude · answer-button order · metaboliser trait ·
+patient from a pool · 1 vs 2–3 stacked events (difficulty). Optional session high-score.
+
+### Superseded from v0.5
+The hold-to-infuse twitch loop and the „Hilf der Familie" 3-patient arc (§12–§17) are
+**replaced** by this decision loop. Reusable as-is: German locale + `t()`, the dark theme,
+the screen-routing/flow shell, and the gauge (→ the fixed-band torso bar).
