@@ -11,11 +11,11 @@ default:
 
 # one-time setup: venv + backend deps + frontend packages
 setup:
-    powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1
 
 # start backend (:8000) + frontend (:5173) together — Ctrl+C stops both
 dev:
-    powershell -ExecutionPolicy Bypass -File scripts/run-dev.ps1
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-dev.ps1
 
 # start only the backend (uvicorn, autoreload) on :8000
 backend:
