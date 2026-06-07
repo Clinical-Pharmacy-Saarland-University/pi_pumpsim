@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { t } from '../locale'
-  import { game, retry } from '../game.svelte'
+  import { t } from '../locale.svelte'
+  import { game, retry, backToStories } from '../game.svelte'
 
   let info = $derived(
     game.outcome === 'win'
@@ -27,7 +27,10 @@
     <p>{t('out.dyk.text')}</p>
   </div>
 
-  <button class="btn primary" onclick={retry}>{t('common.retry')}</button>
+  <div class="actions">
+    <button class="btn" onclick={backToStories}>← {t('stories.title')}</button>
+    <button class="btn primary" onclick={retry}>{t('common.retry')}</button>
+  </div>
 </div>
 
 <style>
@@ -94,7 +97,9 @@
     font-size: 18px;
     line-height: 1.5;
   }
-  .btn.primary {
+  .actions {
+    display: flex;
+    gap: 12px;
     margin-top: 8px;
   }
 </style>

@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { t } from '../locale'
-  import TorsoBar from '../TorsoBar.svelte'
+  import { t } from '../locale.svelte'
   import {
     game,
     chooseDose,
@@ -11,6 +10,7 @@
     answerKnowledge,
     toDecision,
     choose,
+    cancelStory,
   } from '../game.svelte'
 
   let ev = $derived(game.events[game.idx])
@@ -29,6 +29,8 @@
 </script>
 
 <div class="screen">
+  <button class="cancel" onclick={cancelStory}>✕ {t('common.cancel')}</button>
+
   <div class="panel">
     {#if game.phase === 'dose'}
       <h2>{t('dose.prompt')}</h2>
@@ -77,30 +79,38 @@
       </div>
     {/if}
   </div>
-
-  <div class="bar">
-    {#if game.level}<TorsoBar s={game.level} />{/if}
-  </div>
 </div>
 
 <style>
   .screen {
+    position: relative;
     height: 100%;
-    display: grid;
-    grid-template-columns: 1.2fr 0.8fr;
-    gap: clamp(20px, 4vw, 48px);
+    display: flex;
     align-items: center;
-    padding: 24px clamp(20px, 4vw, 48px);
+    justify-content: center;
+    padding: 24px clamp(24px, 6vw, 110px);
+  }
+  .cancel {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-weight: 600;
+    color: var(--dim);
   }
   .panel {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
     align-items: flex-start;
-    min-width: 0;
+    width: 100%;
+    max-width: 820px;
   }
   h2 {
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 800;
   }
   .row {
@@ -111,20 +121,19 @@
   .col {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     width: 100%;
-    max-width: 520px;
+    max-width: 640px;
   }
   .col .btn {
     text-align: left;
   }
   .icon {
-    font-size: 56px;
+    font-size: 64px;
   }
   .story {
-    font-size: 22px;
+    font-size: 24px;
     line-height: 1.5;
-    max-width: 560px;
   }
   .hint {
     font-size: 14px;
@@ -135,7 +144,7 @@
     color: var(--dim);
   }
   .status {
-    font-size: 26px;
+    font-size: 30px;
     font-weight: 800;
   }
   .status.good,
@@ -150,11 +159,11 @@
     color: var(--toxic);
   }
   .fb {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 800;
   }
   .dots {
-    font-size: 48px;
+    font-size: 56px;
     color: var(--dim);
     animation: pulse 1s ease-in-out infinite;
   }
@@ -166,7 +175,7 @@
   .hold {
     background: linear-gradient(135deg, var(--water-top), var(--water-bot));
     border-radius: 16px;
-    padding: 18px 40px;
+    padding: 18px 44px;
     font-size: 18px;
     font-weight: 800;
     color: #fff;
@@ -174,10 +183,5 @@
   }
   .hold:active {
     transform: scale(0.97);
-  }
-  .bar {
-    height: 100%;
-    display: flex;
-    justify-content: center;
   }
 </style>
