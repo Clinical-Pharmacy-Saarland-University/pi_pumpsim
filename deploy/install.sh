@@ -16,9 +16,11 @@ echo "==> pi_pumpsim install"
 echo "    app dir: $APP_DIR"
 echo "    user:    $USER_NAME"
 
-echo "==> apt packages (sway, chromium, python, node)"
+echo "==> apt packages (sway, chromium, python, node, emoji font)"
 sudo apt update
-sudo apt install -y sway python3-venv python3-pip curl nodejs npm
+# fonts-noto-color-emoji: Pi OS Lite ships no colour-emoji font, so Chromium
+# renders the game's emoji (story icons, age icons, …) as blank/tofu without it.
+sudo apt install -y sway python3-venv python3-pip curl nodejs npm fonts-noto-color-emoji
 # chromium package name varies by release: 'chromium' (Debian/Pi OS trixie+), 'chromium-browser' (older Bookworm)
 sudo apt install -y chromium || sudo apt install -y chromium-browser
 # GPIO libs for the real pump — prebuilt apt packages (no compiler/swig needed).
