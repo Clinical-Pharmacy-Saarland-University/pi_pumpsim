@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
-"""Standalone pump test bench — drive a reversible (DIR + PWM) pump and check
-direction + speed, independent of the game. Touch/web UI, no project deps.
+"""Standalone pump test bench for an IBT-2 (BTS7960) H-bridge driver.
 
-PINS (BCM / physical header):
-    SPEED (PWM) = GPIO12  (pin 32, hardware PWM0)
-    DIR         = GPIO16  (pin 36)
-    GND         = pin 34   <-- must be common with the driver's GND
+Check pump direction + speed independently of the game, from a touch/web UI.
 
-Only logic signals go to the driver; the motor power stays on its external supply.
-Override pins/behaviour via env: PUMP_PWM_PIN, PUMP_DIR_PIN, PUMP_DIR_IN_HIGH,
-PUMP_PWM_HZ, PUMP_TEST_PORT.
+The IBT-2 uses TWO pwm inputs (one per direction) + two enables:
+    RPWM = GPIO12 (pin 32, PWM0)   one direction's speed
+    LPWM = GPIO13 (pin 33, PWM1)   other direction's speed
+    R_EN = GPIO23 (pin 16)         enable (held high)
+    L_EN = GPIO24 (pin 18)         enable (held high)
+    VCC  = 5V  (pin 2)             driver logic supply
+    GND  = GND (pin 6)             common ground with the Pi
+B+/B- = external motor supply ; M+/M- = pump motor. (R_IS/L_IS: leave unconnected.)
 
-Run on the Pi (no sudo needed — user is in the 'gpio' group):
+Direction: drive ONE pwm at the wanted duty, the other at 0. Never both > 0.
+'in' uses RPWM by default; if in/out come out swapped, set PUMP_IN_IS_RPWM=0
+(or swap the two motor leads M+/M-).
+
+Run on the Pi (no sudo; user is in the 'gpio' group):
     python3 ~/pi_pumpsim/tools/pump_test.py
-Then open  http://pumpsim.local:8001  (from your PC) or http://localhost:8001 (Pi).
-Ctrl+C stops the pump and exits.
+Then open  http://pumpsim.local:8001  from your PC. Ctrl+C stops + releases GPIO.
+Override via env: PUMP_RPWM_PIN PUMP_LPWM_PIN PUMP_REN_PIN PUMP_LEN_PIN
+                  PUMP_IN_IS_RPWM PUMP_PWM_HZ PUMP_TEST_PORT
 """
 from __future__ import annotations
 
@@ -25,9 +31,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 os.environ.setdefault("GPIOZERO_PIN_FACTORY", "lgpio")
 
-PWM_PIN = int(os.environ.get("PUMP_PWM_PIN", "12"))
-DIR_PIN = int(os.environ.get("PUMP_DIR_PIN", "16"))
-DIR_IN_HIGH = os.environ.get("PUMP_DIR_IN_HIGH", "1") == "1"  # DIR level that means "in"
+RPWM_PIN = int(os.environ.get("PUMP_RPWM_PIN", "12"))
+LPWM_PIN = int(os.environ.get("PUMP_LPWM_PIN", "13"))
+REN_PIN = int(os.environ.get("PUMP_REN_PIN", "23"))
+LEN_PIN = int(os.environ.get("PUMP_LEN_PIN", "24"))
+IN_IS_RPWM = os.environ.get("PUMP_IN_IS_RPWM", "1") == "1"  # which pwm pin means "in"
 PWM_HZ = int(os.environ.get("PUMP_PWM_HZ", "1000"))
 PORT = int(os.environ.get("PUMP_TEST_PORT", "8001"))
 MAX_SECONDS = 120  # safety cap on timed runs
@@ -37,8 +45,16 @@ try:
 except Exception as e:  # pragma: no cover - Pi-only
     raise SystemExit(f"gpiozero not available ({e}). Run this on the Pi.")
 
-_dir = DigitalOutputDevice(DIR_PIN)
-_pwm = PWMOutputDevice(PWM_PIN, frequency=PWM_HZ)
+_rpwm = PWMOutputDevice(RPWM_PIN, frequency=PWM_HZ)
+_lpwm = PWMOutputDevice(LPWM_PIN, frequency=PWM_HZ)
+_ren = DigitalOutputDevice(REN_PIN)
+_len = DigitalOutputDevice(LEN_PIN)
+_ren.on()  # enable both half-bridges; we steer via the PWM pins
+_len.on()
+
+# map logical direction -> (forward_pwm, reverse_pwm) devices
+_in_pwm = _rpwm if IN_IS_RPWM else _lpwm
+_out_pwm = _lpwm if IN_IS_RPWM else _rpwm
 
 _lock = threading.Lock()
 _state = {"direction": "stop", "speed": 0}  # speed 0..100
@@ -54,16 +70,18 @@ def apply(direction: str, speed: int) -> None:
             _timer.cancel()
             _timer = None
         if direction == "stop" or speed == 0:
-            _pwm.value = 0.0
+            _rpwm.value = 0.0
+            _lpwm.value = 0.0
             _state.update(direction="stop", speed=0)
             return
         if direction == "in":
-            _dir.value = 1 if DIR_IN_HIGH else 0
+            _out_pwm.value = 0.0  # zero the opposite first — never both high
+            _in_pwm.value = speed / 100.0
         elif direction == "out":
-            _dir.value = 0 if DIR_IN_HIGH else 1
+            _in_pwm.value = 0.0
+            _out_pwm.value = speed / 100.0
         else:
             return
-        _pwm.value = speed / 100.0
         _state.update(direction=direction, speed=speed)
 
 
@@ -92,12 +110,11 @@ input[type=range]{width:100%;height:42px}
 .big{font-size:40px;font-weight:800;text-align:center}
 .state{background:#141b33;border:1px solid #2a3556;border-radius:14px;padding:14px;margin-top:8px;text-align:center}
 .pins{margin-top:18px;color:#6b7794;font-size:12px;line-height:1.6}
-kbd{background:#1b2440;border:1px solid #2a3556;border-radius:6px;padding:1px 6px}
 </style></head><body>
-<h1>Pump test bench</h1><div class=sub>direction + speed check (reversible DIR+PWM pump)</div>
+<h1>Pump test bench</h1><div class=sub>IBT-2 H-bridge &middot; direction + speed check</div>
 <div class=speed>
-  <label>Speed: <b id=spv>50</b>%</label>
-  <input id=sp type=range min=0 max=100 value=50 oninput="onSpeed()">
+  <label>Speed: <b id=spv>30</b>%</label>
+  <input id=sp type=range min=0 max=100 value=30 oninput="onSpeed()">
 </div>
 <div class=row>
   <button class=in onclick="setDir('in')">▲ IN<br><small>fill</small></button>
@@ -119,7 +136,7 @@ function onSpeed(){document.getElementById('spv').textContent=spd(); if(dir!=='s
 async function post(p,b){const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});return r.json()}
 function show(s){dir=s.direction;document.getElementById('now').textContent=s.direction==='stop'?'STOP':(s.direction.toUpperCase()+' · '+s.speed+'%')}
 async function setDir(d){dir=d;show(await post('/api/set',{dir:d,speed:spd()}))}
-async function run(d,sec){document.getElementById('sp').value=spd();show(await post('/api/run',{dir:d,speed:spd(),seconds:sec}))}
+async function run(d,sec){show(await post('/api/run',{dir:d,speed:spd(),seconds:sec}))}
 </script></body></html>"""
 
 
@@ -137,9 +154,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path in ("/", "/index.html"):
-            pins = (f"SPEED(PWM)=GPIO{PWM_PIN} (pin 32) &middot; DIR=GPIO{DIR_PIN} (pin 36) "
-                    f"&middot; GND=pin 34 &middot; PWM {PWM_HZ}Hz &middot; 'in'=DIR "
-                    f"{'HIGH' if DIR_IN_HIGH else 'LOW'}")
+            pins = (f"RPWM=GPIO{RPWM_PIN} (pin 32) &middot; LPWM=GPIO{LPWM_PIN} (pin 33) "
+                    f"&middot; R_EN=GPIO{REN_PIN} &middot; L_EN=GPIO{LEN_PIN} &middot; "
+                    f"PWM {PWM_HZ}Hz &middot; 'in'={'RPWM' if IN_IS_RPWM else 'LPWM'}")
             body = PAGE.replace("__PINS__", pins).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -169,18 +186,19 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"Pump test bench on http://0.0.0.0:{PORT}")
-    print(f"  SPEED(PWM)=GPIO{PWM_PIN} (pin 32)  DIR=GPIO{DIR_PIN} (pin 36)  GND=pin 34")
-    print(f"  PWM={PWM_HZ}Hz  'in'=DIR {'HIGH' if DIR_IN_HIGH else 'LOW'}")
-    print("Open it in a browser. Ctrl+C stops the pump and exits.")
+    print(f"Pump test bench (IBT-2) on http://0.0.0.0:{PORT}")
+    print(f"  RPWM=GPIO{RPWM_PIN}(pin32) LPWM=GPIO{LPWM_PIN}(pin33) "
+          f"R_EN=GPIO{REN_PIN}(pin16) L_EN=GPIO{LEN_PIN}(pin18)")
+    print(f"  PWM={PWM_HZ}Hz  'in'={'RPWM' if IN_IS_RPWM else 'LPWM'}")
+    print("Open it in a browser. Ctrl+C stops the pump and releases GPIO.")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         apply("stop", 0)
-        _pwm.close()
-        _dir.close()
+        for d in (_rpwm, _lpwm, _ren, _len):
+            d.close()
         print("\nstopped, GPIO released.")
 
 
