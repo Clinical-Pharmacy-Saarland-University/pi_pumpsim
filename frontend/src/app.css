@@ -16,6 +16,13 @@
   --para: #ffb703;
   --sim: #4cc9f0;
   --meto: #b794ff;
+  /* SafePolyMed brand (safepolymed.eu): deep blue + cyan. The cyan is the
+     signature accent; the deep blue is too dark for the black-box display, so
+     UI uses the brighter cyan and a light "ink" instead. */
+  --spm-blue: #10427a;
+  --spm-cyan: #00beca;
+  --spm-cyan-bright: #28e6e0;
+  --spm-ink: #eaf2ff;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }

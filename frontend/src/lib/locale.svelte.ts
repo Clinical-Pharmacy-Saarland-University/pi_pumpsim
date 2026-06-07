@@ -2,13 +2,14 @@
 // key (and for whole locales) that isn't translated yet.
 type Params = Record<string, string | number>
 
-export type Locale = 'de' | 'en' | 'nl' | 'ar'
+export type Locale = 'de' | 'en' | 'fr' | 'nl' | 'ar'
 
-export const LOCALES: { id: Locale; flag: string; name: string }[] = [
-  { id: 'de', flag: '🇩🇪', name: 'Deutsch' },
-  { id: 'en', flag: '🇬🇧', name: 'English' },
-  { id: 'nl', flag: '🇳🇱', name: 'Nederlands' },
-  { id: 'ar', flag: '🇸🇦', name: 'العربية' },
+export const LOCALES: { id: Locale; name: string }[] = [
+  { id: 'de', name: 'Deutsch' },
+  { id: 'en', name: 'English' },
+  { id: 'fr', name: 'Français' },
+  { id: 'nl', name: 'Nederlands' },
+  { id: 'ar', name: 'العربية' },
 ]
 
 export const i18n = $state({ locale: 'de' as Locale })
@@ -27,6 +28,7 @@ const de: Record<string, string> = {
   'age.young': 'Kinder & Jugendliche',
   'age.adult': 'Erwachsene',
   'start.go': "Los geht's",
+  'start.credit': 'SafePolyMed · EU-Forschungsprojekt · Klinische Pharmazie, Universität des Saarlandes',
 
   // story select
   'stories.title': 'Wähle eine Geschichte',
@@ -122,8 +124,51 @@ const de: Record<string, string> = {
   'admin.close': 'Schließen',
 }
 
-// other locales fall back to German until translated
-const dicts: Record<Locale, Record<string, string>> = { de, en: {}, nl: {}, ar: {} }
+// Start-screen translations (test of the t() mechanism). Everything else still
+// falls back to German until the rest of each dictionary is written.
+const en: Record<string, string> = {
+  'app.subtitle': 'Get your patient through safely!',
+  'start.lang': 'Language',
+  'start.age': "Who's playing?",
+  'age.young': 'Kids & teens',
+  'age.adult': 'Adults',
+  'start.go': "Let's go",
+  'start.credit': 'SafePolyMed · EU research project · Clinical Pharmacy, Saarland University',
+}
+
+const fr: Record<string, string> = {
+  'app.subtitle': 'Amène ton patient à bon port, en toute sécurité !',
+  'start.lang': 'Langue',
+  'start.age': 'Qui joue ?',
+  'age.young': 'Enfants & ados',
+  'age.adult': 'Adultes',
+  'start.go': "C'est parti !",
+  'start.credit':
+    "SafePolyMed · Projet de recherche de l'UE · Pharmacie clinique, Université de la Sarre",
+}
+
+const nl: Record<string, string> = {
+  'app.subtitle': 'Loods je patiënt veilig erdoorheen!',
+  'start.lang': 'Taal',
+  'start.age': 'Wie speelt er?',
+  'age.young': 'Kinderen & jongeren',
+  'age.adult': 'Volwassenen',
+  'start.go': 'Aan de slag',
+  'start.credit':
+    'SafePolyMed · EU-onderzoeksproject · Klinische Farmacie, Universiteit van Saarland',
+}
+
+const ar: Record<string, string> = {
+  'app.subtitle': 'اجتَز بمريضك بأمان!',
+  'start.lang': 'اللغة',
+  'start.age': 'مَن يلعب؟',
+  'age.young': 'الأطفال والمراهقون',
+  'age.adult': 'البالغون',
+  'start.go': 'هيا نبدأ',
+  'start.credit': 'SafePolyMed · مشروع بحثي من الاتحاد الأوروبي · الصيدلة السريرية، جامعة زارلاند',
+}
+
+const dicts: Record<Locale, Record<string, string>> = { de, en, fr, nl, ar }
 
 export function t(key: string, params?: Params): string {
   let s = dicts[i18n.locale][key] ?? de[key] ?? key
