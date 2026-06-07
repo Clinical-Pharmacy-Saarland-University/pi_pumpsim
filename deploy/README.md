@@ -51,7 +51,7 @@ set by *which* PWM input you drive (RPWM vs LPWM); both enables are held high.
 | IBT-2 pin | wire colour | Raspberry Pi (BCM / physical) |
 |---|---|---|
 | VCC  | 🔴 red    | **5V**  (pin 2)   |
-| GND  | ⚫ black  | **GND** (pin 6) — common ground |
+| GND  | ⚫ black  | **GND** (pin 14) — common ground |
 | RPWM | 🟢 green  | **GPIO12** (pin 32, PWM0) |
 | LPWM | ⚪ white  | **GPIO13** (pin 33, PWM1) |
 | R_EN | 🔵 blue   | **GPIO23** (pin 16) |

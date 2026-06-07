@@ -9,7 +9,7 @@ The IBT-2 uses TWO pwm inputs (one per direction) + two enables:
     R_EN = GPIO23 (pin 16)         enable (held high)
     L_EN = GPIO24 (pin 18)         enable (held high)
     VCC  = 5V  (pin 2)             driver logic supply
-    GND  = GND (pin 6)             common ground with the Pi
+    GND  = GND (pin 14)            common ground with the Pi
 B+/B- = external motor supply ; M+/M- = pump motor. (R_IS/L_IS: leave unconnected.)
 
 Direction: drive ONE pwm at the wanted duty, the other at 0. Never both > 0.
