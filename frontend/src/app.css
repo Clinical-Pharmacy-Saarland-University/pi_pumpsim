@@ -29,7 +29,7 @@ html,
 body {
   height: 100%;
   overflow: hidden;
-  background: radial-gradient(1200px 700px at 50% -8%, var(--bg1), var(--bg0));
+  background: #05060c;
   color: var(--text);
   -webkit-user-select: none;
   user-select: none;
@@ -39,6 +39,39 @@ body {
 #app {
   height: 100vh;
   width: 100vw;
+}
+
+/* Device frame: the game renders at the EXACT Pi screen size (1280×720) and is
+   scaled to fit the browser window. On the real Pi (1280×720 fullscreen) scale=1
+   and it fills the screen with the bezel off-screen. */
+.device {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #05060c;
+}
+.device .label {
+  color: var(--dim);
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+.pi {
+  width: 1280px;
+  height: 720px;
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  transform-origin: center center;
+  background: radial-gradient(1200px 700px at 50% -8%, var(--bg1), var(--bg0));
+}
+/* bezel only when previewed (desktop); on a real 1280×720 Pi screen it's clean fullscreen */
+.pi.framed {
+  border-radius: 16px;
+  box-shadow: 0 0 0 10px #0b0e16, 0 0 0 12px #1b2233, 0 40px 90px rgba(0, 0, 0, 0.6);
 }
 
 button {

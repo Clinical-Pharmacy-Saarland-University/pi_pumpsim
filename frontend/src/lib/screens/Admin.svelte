@@ -23,10 +23,10 @@
 
 <style>
   .admin {
-    position: fixed;
+    position: absolute;
     top: 0;
     right: 0;
-    height: 100vh;
+    height: 100%;
     width: min(420px, 92vw);
     background: rgba(12, 16, 32, 0.97);
     border-left: 1px solid var(--border);

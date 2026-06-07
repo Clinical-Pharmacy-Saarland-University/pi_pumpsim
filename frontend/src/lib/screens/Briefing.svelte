@@ -26,7 +26,7 @@
 
 <style>
   .screen {
-    height: 100vh;
+    height: 100%;
     display: grid;
     grid-template-columns: 1.2fr 0.8fr;
     gap: clamp(20px, 4vw, 48px);
@@ -60,7 +60,7 @@
     color: var(--dim);
   }
   .bar {
-    height: 80vh;
+    height: 100%;
     display: flex;
     justify-content: center;
   }
