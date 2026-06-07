@@ -134,6 +134,21 @@ const en: Record<string, string> = {
   'age.adult': 'Adults',
   'start.go': "Let's go",
   'start.credit': 'SafePolyMed · EU research project · Clinical Pharmacy, Saarland University',
+  // story select
+  'stories.title': 'Choose a story',
+  'common.back': 'Back',
+  'story.grapefruit.title': 'The Grapefruit Trap',
+  'story.grapefruit.desc': 'Lower cholesterol — but watch out at breakfast. (Food)',
+  'story.johanniskraut.title': 'The Herbal Problem',
+  'story.johanniskraut.desc': 'A herbal remedy gets involved. (Herb/drug)',
+  'story.gene.title': 'Everyone is different',
+  'story.gene.desc': 'Same dose, different genes. (Gene interaction)',
+  'story.ddi.title': 'When pills clash',
+  'story.ddi.desc': 'Two medicines, one problem. (Interaction)',
+  'story.organ.title': 'Weak organs',
+  'story.organ.desc': 'Kidney and liver work more slowly.',
+  'story.adherence.title': 'Double by accident',
+  'story.adherence.desc': 'One pill too many … or too few?',
 }
 
 const fr: Record<string, string> = {
@@ -145,6 +160,21 @@ const fr: Record<string, string> = {
   'start.go': "C'est parti !",
   'start.credit':
     "SafePolyMed · Projet de recherche de l'UE · Pharmacie clinique, Université de la Sarre",
+  // story select
+  'stories.title': 'Choisis une histoire',
+  'common.back': 'Retour',
+  'story.grapefruit.title': 'Le piège du pamplemousse',
+  'story.grapefruit.desc': 'Faire baisser le cholestérol – mais attention au petit-déjeuner. (Alimentation)',
+  'story.johanniskraut.title': 'Le problème des plantes',
+  'story.johanniskraut.desc': "Un remède à base de plantes s'en mêle. (Plante/médicament)",
+  'story.gene.title': 'Chacun est différent',
+  'story.gene.desc': 'Même dose, gènes différents. (Interaction génétique)',
+  'story.ddi.title': 'Quand les pilules se disputent',
+  'story.ddi.desc': 'Deux médicaments, un problème. (Interaction)',
+  'story.organ.title': 'Organes affaiblis',
+  'story.organ.desc': 'Les reins et le foie travaillent plus lentement.',
+  'story.adherence.title': 'Le double par erreur',
+  'story.adherence.desc': 'Un comprimé de trop … ou pas assez ?',
 }
 
 const nl: Record<string, string> = {
@@ -156,6 +186,21 @@ const nl: Record<string, string> = {
   'start.go': 'Aan de slag',
   'start.credit':
     'SafePolyMed · EU-onderzoeksproject · Klinische Farmacie, Universiteit van Saarland',
+  // story select
+  'stories.title': 'Kies een verhaal',
+  'common.back': 'Terug',
+  'story.grapefruit.title': 'De grapefruitval',
+  'story.grapefruit.desc': 'Cholesterol verlagen – maar pas op bij het ontbijt. (Voeding)',
+  'story.johanniskraut.title': 'Het kruidenprobleem',
+  'story.johanniskraut.desc': 'Een kruidenmiddel mengt zich erin. (Plant/geneesmiddel)',
+  'story.gene.title': 'Iedereen is anders',
+  'story.gene.desc': 'Zelfde dosis, andere genen. (Gen-interactie)',
+  'story.ddi.title': 'Als pillen ruziën',
+  'story.ddi.desc': 'Twee medicijnen, één probleem. (Interactie)',
+  'story.organ.title': 'Zwakke organen',
+  'story.organ.desc': 'Nieren en lever werken trager.',
+  'story.adherence.title': 'Per ongeluk dubbel',
+  'story.adherence.desc': 'Eén tablet te veel … of te weinig?',
 }
 
 const ar: Record<string, string> = {
@@ -166,6 +211,21 @@ const ar: Record<string, string> = {
   'age.adult': 'البالغون',
   'start.go': 'هيا نبدأ',
   'start.credit': 'SafePolyMed · مشروع بحثي من الاتحاد الأوروبي · الصيدلة السريرية، جامعة زارلاند',
+  // story select
+  'stories.title': 'اختر قصة',
+  'common.back': 'رجوع',
+  'story.grapefruit.title': 'فخ الجريب فروت',
+  'story.grapefruit.desc': 'خفض الكوليسترول – لكن انتبه عند الفطور. (غذاء)',
+  'story.johanniskraut.title': 'مشكلة الأعشاب',
+  'story.johanniskraut.desc': 'مكمّل عشبي يتدخل. (نبات/دواء)',
+  'story.gene.title': 'كل شخص مختلف',
+  'story.gene.desc': 'نفس الجرعة، جينات مختلفة. (تفاعل جيني)',
+  'story.ddi.title': 'عندما تتعارض الأدوية',
+  'story.ddi.desc': 'دواءان، مشكلة واحدة. (تفاعل دوائي)',
+  'story.organ.title': 'أعضاء ضعيفة',
+  'story.organ.desc': 'الكلى والكبد يعملان ببطء أكبر.',
+  'story.adherence.title': 'جرعة مضاعفة عن طريق الخطأ',
+  'story.adherence.desc': 'حبة زائدة … أم ناقصة؟',
 }
 
 const dicts: Record<Locale, Record<string, string>> = { de, en, fr, nl, ar }

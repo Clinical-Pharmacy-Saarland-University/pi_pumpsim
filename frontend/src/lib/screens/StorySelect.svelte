@@ -2,9 +2,12 @@
   import { t } from '../locale.svelte'
   import { selectStory, back } from '../game.svelte'
   import { STORIES } from '../stories'
+  import Backdrop from '../Backdrop.svelte'
 </script>
 
 <div class="select">
+  <Backdrop />
+
   <header>
     <button class="back" onclick={back}>← {t('common.back')}</button>
     <h1>{t('stories.title')}</h1>
@@ -12,18 +15,15 @@
   </header>
 
   <div class="grid">
-    {#each STORIES as s}
-      <button
-        class="card"
-        class:disabled={!s.available}
-        style="--c:{s.color}"
-        onclick={() => selectStory(s)}
-        disabled={!s.available}
-      >
-        <div class="icon">{s.icon}</div>
-        <div class="title">{t(s.titleKey)}</div>
-        <div class="desc">{t(s.descKey)}</div>
-        {#if !s.available}<div class="soon">{t('stories.soon')}</div>{/if}
+    {#each STORIES as s, i}
+      <!-- all cards look playable; unbuilt stories are a no-op on press for now
+           (selectStory early-returns while story.available is false) -->
+      <button class="card" style="--c:{s.color}; --i:{i}" onclick={() => selectStory(s)}>
+        <span class="watermark">{s.icon}</span>
+        <span class="chip">{s.icon}</span>
+        <span class="title">{t(s.titleKey)}</span>
+        <span class="desc">{t(s.descKey)}</span>
+        <span class="badge play" aria-hidden="true">▶</span>
       </button>
     {/each}
   </div>
@@ -31,85 +31,163 @@
 
 <style>
   .select {
+    position: relative;
     height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 18px clamp(18px, 3vw, 36px) 24px;
-    gap: 14px;
+    padding: 20px clamp(24px, 3vw, 44px) 26px;
+    gap: 16px;
+    overflow: hidden;
   }
+
+  /* ---- header ----------------------------------------------------------- */
   header {
+    position: relative;
+    z-index: 1;
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
+    animation: headin 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both;
   }
   .back {
     justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px 16px;
-    font-weight: 600;
+    border-radius: 14px;
+    padding: 15px 24px;
+    font-size: 19px;
+    font-weight: 700;
+    transition: transform 0.1s ease, border-color 0.2s ease, background 0.2s ease;
+  }
+  .back:active {
+    background: var(--surface2);
+    border-color: var(--spm-cyan);
+    transform: scale(0.96);
   }
   h1 {
-    font-size: 26px;
-    font-weight: 800;
+    font-weight: 900;
     text-align: center;
+    letter-spacing: 0.3px;
+    font-size: 36px;
+    background: linear-gradient(90deg, var(--green), var(--spm-cyan-bright));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
+
+  /* ---- grid ------------------------------------------------------------- */
   .grid {
+    position: relative;
+    z-index: 1;
     flex: 1;
     min-height: 0;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(2, 1fr);
-    gap: 16px;
+    gap: 18px;
   }
   .card {
     position: relative;
-    background: var(--surface);
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border);
-    border-left: 5px solid var(--c);
-    border-radius: 18px;
-    padding: 18px 20px;
+    border-radius: 24px;
+    padding: 30px 32px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    justify-content: center;
+    gap: 16px;
     align-items: flex-start;
     text-align: left;
-    transition: transform 0.08s ease, background 0.2s ease;
+    transition: transform 0.12s ease, box-shadow 0.25s ease, border-color 0.25s ease,
+      background 0.2s ease;
+    animation: cardin 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    animation-delay: calc(var(--i) * 0.07s);
   }
-  .card:not(.disabled):hover {
-    background: var(--surface2);
+
+  /* big faded icon for depth, tinted by the story colour */
+  .watermark {
+    position: absolute;
+    right: -18px;
+    bottom: -34px;
+    font-size: 190px;
+    line-height: 1;
+    opacity: 0.09;
+    transform: rotate(-12deg);
+    pointer-events: none;
   }
-  .card:not(.disabled):active {
-    transform: scale(0.98);
-  }
-  .card.disabled {
-    opacity: 0.45;
-    cursor: default;
-  }
-  .icon {
-    font-size: 40px;
+  .chip {
+    display: grid;
+    place-items: center;
+    width: 92px;
+    height: 92px;
+    border-radius: 24px;
+    font-size: 52px;
+    line-height: 1;
+    background: color-mix(in srgb, var(--c) 24%, transparent);
+    border: 1px solid color-mix(in srgb, var(--c) 48%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
   }
   .title {
-    font-size: 20px;
+    font-size: 30px;
     font-weight: 800;
+    line-height: 1.15;
   }
   .desc {
-    font-size: 14px;
+    font-size: 19px;
     color: var(--dim);
-    line-height: 1.4;
+    line-height: 1.5;
   }
-  .soon {
+
+  /* every card glows in its own story colour and invites a tap */
+  .card {
+    border-color: color-mix(in srgb, var(--c) 55%, var(--border));
+    box-shadow: 0 12px 34px color-mix(in srgb, var(--c) 20%, transparent);
+  }
+  .card:active {
+    transform: scale(0.97);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 44px color-mix(in srgb, var(--c) 32%, transparent);
+  }
+
+  .badge {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--dim);
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 3px 10px;
+    top: 16px;
+    right: 16px;
+  }
+  .badge.play {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--spm-cyan-bright), var(--spm-cyan));
+    color: #04222a;
+    font-size: 21px;
+    padding-left: 3px;
+    box-shadow: 0 6px 18px rgba(0, 190, 202, 0.5);
+  }
+
+  /* ---- keyframes -------------------------------------------------------- */
+  @keyframes headin {
+    from {
+      opacity: 0;
+      transform: translateY(-16px);
+    }
+  }
+  @keyframes cardin {
+    from {
+      opacity: 0;
+      transform: translateY(26px) scale(0.96);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card,
+    header {
+      animation: none;
+    }
   }
 </style>
