@@ -30,5 +30,5 @@ export const STORIES: Story[] = [
   { id: 'gene', titleKey: 'story.gene.title', descKey: 'story.gene.desc', icon: '🧬', color: '#b794ff', available: true, engine: 'v2', patient: PATIENTS[0], events: [] },
   { id: 'ddi', titleKey: 'story.ddi.title', descKey: 'story.ddi.desc', icon: '💊', color: '#4cc9f0', available: true, engine: 'v2', patient: PATIENTS[0], events: [] },
   { id: 'organ', titleKey: 'story.organ.title', descKey: 'story.organ.desc', icon: '🫘', color: '#ff6b7a', available: true, engine: 'v2', patient: PATIENTS[0], events: [] },
-  { id: 'adherence', titleKey: 'story.adherence.title', descKey: 'story.adherence.desc', icon: '⏰', color: '#9aa6c9', available: false, patient: PATIENTS[0], events: [] },
+  { id: 'adherence', titleKey: 'story.adherence.title', descKey: 'story.adherence.desc', icon: '⏰', color: '#9aa6c9', available: true, engine: 'v2', patient: PATIENTS[0], events: [] },
 ]
