@@ -133,8 +133,9 @@ tap a culprit — say the word.)
   gefallen."
 
 ### 6 · Frucht-Finale *(win path only — torso steady green)*
-- **Prompt** — young: „Welche Früchte sind genauso tricky wie die Grapefruit? Tippe alle an." ·
-  adult: „Welche Früchte können denselben Ärger machen wie die Grapefruit? Wähle alle aus."
+- **Prompt** — young: „Welche dieser Früchte sind tricky fürs Medikament? Tippe alle an." ·
+  adult: „Welche dieser Früchte hemmen den Abbau (CYP3A4)? Wähle alle aus."
+  *(Grapefruit is itself a correct answer — so the prompt asks „which of these", not „like grapefruit".)*
 - **Interagieren ✓:** Grapefruit · Pomelo · Bitterorange — **harmlos:** Orange · Mandarine · Zitrone
 - **Feedback:** correct „Perfekt – alle richtig erkannt!" · wrong „Nicht ganz – schau dir die Auflösung an."
 - **Lesson** — young: „Grapefruit, Pomelo und Bitterorange bremsen das Enzym – Orange,

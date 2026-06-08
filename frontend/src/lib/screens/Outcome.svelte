@@ -1,6 +1,8 @@
 <script lang="ts">
   import { t } from '../locale.svelte'
   import { game, retry, backToStories } from '../game.svelte'
+  import Backdrop from '../Backdrop.svelte'
+  import Torso from '../Torso.svelte'
 
   let info = $derived(
     game.outcome === 'win'
@@ -11,80 +13,116 @@
   )
 </script>
 
-<div class="screen">
-  <h1 class={info.cls}>{t(info.title)}</h1>
-  <p class="sub">{t(info.sub, { name: t(game.patient.nameKey) })}</p>
+<div class="outcome">
+  <Backdrop />
 
-  {#if game.outcome === 'win'}
-    <div class="stars">
-      {#each [0, 1, 2] as i}<span class:on={i < game.stars}>★</span>{/each}
-    </div>
-    <div class="count">{t('out.stars', { n: game.stars })}</div>
-  {/if}
+  <div class="stage">
+    <aside class="torso-pane">
+      {#if game.level}<Torso s={game.level} />{/if}
+    </aside>
 
-  <div class="dyk">
-    <span class="lbl">{t('out.dyk')}</span>
-    <p>{t('out.dyk.text')}</p>
-    {#if game.outcome === 'win'}<p class="second">{t('out.dyk2.text')}</p>{/if}
-  </div>
+    <main class="content">
+      <h1 class={info.cls}>{t(info.title)}</h1>
+      <p class="sub">{t(info.sub, { name: t(game.patient.nameKey) })}</p>
 
-  <div class="actions">
-    <button class="btn" onclick={backToStories}>← {t('stories.title')}</button>
-    <button class="btn primary" onclick={retry}>{t('common.retry')}</button>
+      {#if game.outcome === 'win'}
+        <div class="stars">
+          {#each [0, 1, 2] as i}<span class:on={i < game.stars} style="--i:{i}">★</span>{/each}
+        </div>
+        <div class="count">{t('out.stars', { n: game.stars })}</div>
+      {/if}
+
+      <div class="dyk">
+        <span class="lbl">{t('out.dyk')}</span>
+        <p>{t('out.dyk.text')}</p>
+        {#if game.outcome === 'win'}<p class="second">{t('out.dyk2.text')}</p>{/if}
+      </div>
+
+      <div class="actions">
+        <button class="btn" onclick={backToStories}>← {t('stories.title')}</button>
+        <button class="btn primary" onclick={retry}>{t('common.retry')}</button>
+      </div>
+    </main>
   </div>
 </div>
 
 <style>
-  .screen {
+  .outcome {
+    position: relative;
     height: 100%;
+    overflow: hidden;
+  }
+  .stage {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    align-items: center;
+    gap: clamp(20px, 3vw, 56px);
+    padding: 28px clamp(36px, 5vw, 80px) 28px clamp(24px, 3vw, 48px);
+  }
+  .torso-pane {
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
+    height: 100%;
+  }
+  .content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 14px;
-    text-align: center;
-    padding: 30px;
+    max-width: 720px;
+    animation: beatin 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) both;
   }
   h1 {
-    font-size: 46px;
-    font-weight: 800;
+    font-size: clamp(40px, 4.6vw, 58px);
+    font-weight: 900;
+    line-height: 1.05;
   }
   h1.good {
     color: var(--green);
+    text-shadow: 0 0 28px rgba(56, 224, 160, 0.4);
   }
   h1.warn {
     color: var(--grape);
   }
   h1.bad {
     color: var(--toxic);
+    text-shadow: 0 0 28px rgba(255, 107, 122, 0.4);
   }
   .sub {
-    font-size: 20px;
-    color: var(--text);
-    max-width: 620px;
+    font-size: clamp(18px, 2vw, 23px);
+    line-height: 1.5;
   }
   .stars {
+    display: flex;
+    gap: 10px;
     font-size: 56px;
-    letter-spacing: 8px;
+    margin-top: 4px;
   }
   .stars span {
     color: var(--surface2);
+    transform: scale(0.7);
   }
   .stars span.on {
     color: var(--grape);
-    text-shadow: 0 0 16px rgba(255, 183, 3, 0.5);
+    text-shadow: 0 0 18px rgba(255, 183, 3, 0.55);
+    animation: pop 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+    animation-delay: calc(var(--i) * 0.15s + 0.2s);
   }
   .count {
     font-size: 16px;
     color: var(--dim);
   }
   .dyk {
-    max-width: 640px;
+    max-width: 680px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 18px;
     padding: 16px 24px;
-    margin-top: 6px;
+    margin-top: 4px;
   }
   .dyk .lbl {
     font-size: 13px;
@@ -108,5 +146,30 @@
     display: flex;
     gap: 12px;
     margin-top: 8px;
+  }
+  @keyframes beatin {
+    from {
+      opacity: 0;
+      transform: translateY(22px);
+    }
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.2) rotate(-25deg);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .content,
+    .stars span.on {
+      animation: none;
+    }
+    .stars span.on {
+      transform: scale(1);
+    }
   }
 </style>

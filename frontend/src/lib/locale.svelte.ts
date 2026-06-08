@@ -176,7 +176,9 @@ const de: Record<string, string> = {
     'Grapefruit hemmt CYP3A4 in der Darmwand – Simvastatin wird langsamer verstoffwechselt und kumuliert, der Spiegel (und das Muskelschaden-Risiko) steigt. Apfel, Birne und Kaffee beeinflussen CYP3A4 nicht.',
 
   // finale: fruit-identification game (which fruits interact like grapefruit?)
-  'fruits.prompt': 'Welche Früchte können denselben Ärger machen wie die Grapefruit? Wähle alle aus.',
+  'fruits.prompt': 'Bei welchen Früchten musst du aufpassen? Wähle alle aus.',
+  'fruits.prompt.young': 'Welche dieser Früchte sind tricky fürs Medikament? Tippe alle an.',
+  'fruits.prompt.adult': 'Welche dieser Früchte hemmen den Abbau (CYP3A4)? Wähle alle aus.',
   'fruits.confirm': 'Bestätigen',
   'fruits.correct': 'Perfekt – alle richtig erkannt!',
   'fruits.wrong': 'Nicht ganz – schau dir die Auflösung an.',

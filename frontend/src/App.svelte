@@ -2,7 +2,6 @@
   import { onMount } from 'svelte'
   import { game, init } from './lib/game.svelte'
   import { i18n } from './lib/locale.svelte'
-  import MiniBar from './lib/MiniBar.svelte'
   import Start from './lib/screens/Start.svelte'
   import StorySelect from './lib/screens/StorySelect.svelte'
   import Briefing from './lib/screens/Briefing.svelte'
@@ -36,14 +35,6 @@
   })
 
   const playPhases = ['dose', 'dosing', 'reveal', 'story', 'planCheck', 'mechanism', 'decision', 'decided', 'variability', 'settling', 'fruits']
-  // the torso mock is relevant once we're handling a patient
-  let showBar = $derived(
-    !!game.level &&
-      (game.phase === 'briefing' ||
-        game.phase === 'resetting' ||
-        game.phase === 'outcome' ||
-        playPhases.includes(game.phase)),
-  )
 
   function onKey(e: KeyboardEvent) {
     const tg = e.target as HTMLElement | null
@@ -75,7 +66,6 @@
       <Play />
     {/if}
 
-    {#if showBar && game.level}<MiniBar s={game.level} />{/if}
     {#if showAdmin}<Admin onclose={() => (showAdmin = false)} />{/if}
   </div>
 </div>
