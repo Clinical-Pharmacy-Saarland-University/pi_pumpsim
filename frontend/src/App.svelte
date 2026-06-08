@@ -8,6 +8,7 @@
   import Play from './lib/screens/Play.svelte'
   import DdiPlay from './lib/screens/DdiPlay.svelte'
   import OrganPlay from './lib/screens/OrganPlay.svelte'
+  import GenePlay from './lib/screens/GenePlay.svelte'
   import Resetting from './lib/screens/Resetting.svelte'
   import Outcome from './lib/screens/Outcome.svelte'
   import Admin from './lib/screens/Admin.svelte'
@@ -66,7 +67,8 @@
       <Outcome />
     {:else if game.phase === 'play2'}
       {#if game.story?.id === 'ddi'}<DdiPlay />
-      {:else if game.story?.id === 'organ'}<OrganPlay />{/if}
+      {:else if game.story?.id === 'organ'}<OrganPlay />
+      {:else if game.story?.id === 'gene'}<GenePlay />{/if}
     {:else if playPhases.includes(game.phase)}
       <Play />
     {/if}
