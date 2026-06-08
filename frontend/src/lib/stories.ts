@@ -26,7 +26,7 @@ export const STORIES: Story[] = [
     patient: PATIENTS[0],
     events: [EVENTS.grapefruit],
   },
-  { id: 'johanniskraut', titleKey: 'story.johanniskraut.title', descKey: 'story.johanniskraut.desc', icon: '🌿', color: '#38e0a0', available: false, patient: PATIENTS[0], events: [] },
+  { id: 'johanniskraut', titleKey: 'story.johanniskraut.title', descKey: 'story.johanniskraut.desc', icon: '🌿', color: '#38e0a0', available: true, engine: 'v2', patient: PATIENTS[0], events: [] },
   { id: 'gene', titleKey: 'story.gene.title', descKey: 'story.gene.desc', icon: '🧬', color: '#b794ff', available: true, engine: 'v2', patient: PATIENTS[0], events: [] },
   { id: 'ddi', titleKey: 'story.ddi.title', descKey: 'story.ddi.desc', icon: '💊', color: '#4cc9f0', available: true, engine: 'v2', patient: PATIENTS[0], events: [] },
   { id: 'organ', titleKey: 'story.organ.title', descKey: 'story.organ.desc', icon: '🫘', color: '#ff6b7a', available: true, engine: 'v2', patient: PATIENTS[0], events: [] },
