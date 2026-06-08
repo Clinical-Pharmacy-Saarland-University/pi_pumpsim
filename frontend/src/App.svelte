@@ -6,6 +6,7 @@
   import StorySelect from './lib/screens/StorySelect.svelte'
   import Briefing from './lib/screens/Briefing.svelte'
   import Play from './lib/screens/Play.svelte'
+  import DdiPlay from './lib/screens/DdiPlay.svelte'
   import Resetting from './lib/screens/Resetting.svelte'
   import Outcome from './lib/screens/Outcome.svelte'
   import Admin from './lib/screens/Admin.svelte'
@@ -62,6 +63,8 @@
       <Resetting />
     {:else if game.phase === 'outcome'}
       <Outcome />
+    {:else if game.phase === 'play2'}
+      {#if game.story?.id === 'ddi'}<DdiPlay />{/if}
     {:else if playPhases.includes(game.phase)}
       <Play />
     {/if}

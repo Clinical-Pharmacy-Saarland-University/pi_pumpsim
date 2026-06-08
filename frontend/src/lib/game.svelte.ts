@@ -13,6 +13,7 @@ import type { LevelState } from './types'
 export type Phase =
   | 'start'
   | 'storyselect'
+  | 'play2' // self-contained v2 story components (ddi, organ, …)
   | 'briefing'
   | 'dose'
   | 'dosing'
@@ -62,6 +63,20 @@ export const game = $state({
 })
 
 let wait: { next: () => void; armed: boolean } | null = null
+// a second, independent torso driver for the self-contained v2 stories (so they can
+// move the torso + detect settle without going through story-1's phase machine).
+let extWait: { target: number; then: () => void; armed: boolean } | null = null
+
+export function driveTo(target: number, rate: number | undefined, then: () => void): void {
+  const cur = game.level?.level ?? target
+  api.setTarget(target, rate)
+  if (Math.abs(target - cur) < 1) {
+    extWait = null
+    setTimeout(then, 450)
+  } else {
+    extWait = { target, then, armed: false }
+  }
+}
 
 function computeTarget(): number {
   let t = game.base
@@ -114,6 +129,14 @@ function onLevel(s: LevelState) {
       n()
     }
   }
+  if (extWait) {
+    if (s.moving) extWait.armed = true
+    if ((extWait.armed && !s.moving) || Math.abs(s.level - extWait.target) < 0.6) {
+      const n = extWait.then
+      extWait = null
+      n()
+    }
+  }
 }
 
 export function init(): () => void {
@@ -140,6 +163,15 @@ export function stories(): Story[] {
 
 export function selectStory(story: Story): void {
   if (!story.available) return
+  // self-contained v2 stories run their own flow component (App routes by id)
+  if (story.engine === 'v2') {
+    game.story = story
+    game.patient = story.patient
+    game.outcome = null
+    game.stars = 0
+    game.phase = 'play2'
+    return
+  }
   game.story = story
   game.patient = story.patient
   game.events = shuffle(story.events).map((ev) => ({
