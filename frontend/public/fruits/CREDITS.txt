@@ -1,0 +1,10 @@
+Fruit photos for the 'Frühstücks-Falle' finale — via Wikimedia Commons.
+Each line: file  —  author  (license)  —  source page
+
+grapefruit.jpg  —  Ivar Leidus  (CC BY-SA 4.0)  —  https://commons.wikimedia.org/wiki/File:Grapefruits_-_whole-halved-segments.jpg
+pomelo.jpg  —  Ivar Leidus  (CC BY-SA 4.0)  —  https://commons.wikimedia.org/wiki/File:Pomelo_fruit.jpg
+orange.jpg  —  Ivar Leidus  (CC BY-SA 4.0)  —  https://commons.wikimedia.org/wiki/File:Oranges_-_whole-halved-segment.jpg
+zitrone.jpg  —  Evan-Amos  (Public domain)  —  https://commons.wikimedia.org/wiki/File:Lemon-Whole-Split.jpg
+mandarine.jpg  —  Ivar Leidus  (CC BY-SA 4.0)  —  https://commons.wikimedia.org/wiki/File:Mandarins_-_whole_and_halved.jpg
+bitterorange.jpg  —  Zeynel Cebeci  (CC BY-SA 4.0)  —  https://commons.wikimedia.org/wiki/File:Citrus_aurantium_-_Bitter_orange_02.jpg
+

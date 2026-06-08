@@ -2,30 +2,24 @@
   import { t } from '../locale.svelte'
   import {
     game,
-    chooseDose,
-    holdStart,
-    holdStop,
-    startEvents,
-    toKnowledge,
-    answerKnowledge,
-    toDecision,
+    giveDose,
+    toEventReveal,
+    mechanismNext,
     choose,
+    afterDecision,
+    variabilityNext,
     cancelStory,
   } from '../game.svelte'
+  import Reveal from '../Reveal.svelte'
+  import PlanCheck from '../PlanCheck.svelte'
+  import FruitSort from '../FruitSort.svelte'
 
   let ev = $derived(game.events[game.idx])
-  let doseStatus = $derived(
-    game.level?.zone === 'in'
-      ? { key: 'dose.settled.in', cls: 'good' }
-      : game.level && game.level.level > game.level.band_high
-        ? { key: 'dose.settled.over', cls: 'bad' }
-        : { key: 'dose.settled.under', cls: 'warn' },
+  // hide adult-only options (e.g. „Dosis senken") for the young register
+  let choices = $derived(ev.choices.filter((c) => game.ageGroup === 'adult' || !c.adultOnly))
+  let decidedCls = $derived(
+    game.choice?.result === 'win' ? 'good' : game.choice?.result === 'retry' ? 'warn' : 'bad',
   )
-
-  function holdDown(e: PointerEvent) {
-    e.preventDefault()
-    holdStart()
-  }
 </script>
 
 <div class="screen">
@@ -33,50 +27,47 @@
 
   <div class="panel">
     {#if game.phase === 'dose'}
-      <h2>{t('dose.prompt')}</h2>
-      <div class="row">
-        <button class="btn" onclick={() => chooseDose('low')}>{t('dose.low')}</button>
-        <button class="btn" onclick={() => chooseDose('standard')}>{t('dose.standard')}</button>
-        <button class="btn" onclick={() => chooseDose('high')}>{t('dose.high')}</button>
-      </div>
-      <button
-        class="hold"
-        onpointerdown={holdDown}
-        onpointerup={holdStop}
-        onpointerleave={holdStop}
-        onpointercancel={holdStop}>{t('dose.hold')}</button
-      >
-      <p class="hint">{t('dose.arcadeHint')}</p>
-    {:else if game.phase === 'dosing' || game.phase === 'settling'}
+      <div class="icon">💊</div>
+      <h2>{t('dose.startTitle')}</h2>
+      <p class="story">
+        {t('dose.startPrompt', { name: t(game.patient.nameKey), drug: t(game.patient.drugKey) })}
+      </p>
+      <button class="btn primary" onclick={giveDose}>{t('dose.give')}</button>
+    {:else if game.phase === 'dosing'}
+      <p class="time">{t('dose.rising')}</p>
       <div class="dots">…</div>
-    {:else if game.phase === 'doseDone'}
-      <div class="status {doseStatus.cls}">{t(doseStatus.key)}</div>
-      <p class="time">{t('timejump')}</p>
-      <button class="btn primary" onclick={startEvents}>{t('common.next')}</button>
+    {:else if game.phase === 'settling'}
+      <div class="dots">…</div>
+    {:else if game.phase === 'reveal'}
+      <Reveal />
     {:else if game.phase === 'story'}
       <div class="icon">{ev.icon}</div>
       <p class="story">{t(ev.storyKey)}</p>
-      <button class="btn primary" onclick={toKnowledge}>{t('common.next')}</button>
-    {:else if game.phase === 'knowledge'}
-      <h2>{t(ev.knowledge.promptKey)}</h2>
-      <div class="col">
-        {#each ev.knowledge.options as o}
-          <button class="btn" onclick={() => answerKnowledge(o.id)}>{t(o.labelKey)}</button>
-        {/each}
-      </div>
-    {:else if game.phase === 'lesson'}
-      <div class="fb {game.lastCorrect ? 'good' : 'bad'}">
-        {game.lastCorrect ? t('q.correct') : t('q.wrong')}
-      </div>
-      <p class="story">{t(ev.knowledge.lessonKey)}</p>
-      <button class="btn primary" onclick={toDecision}>{t('common.next')}</button>
+      <button class="btn primary" onclick={toEventReveal}>{t('common.next')}</button>
+    {:else if game.phase === 'planCheck'}
+      <PlanCheck />
+    {:else if game.phase === 'mechanism'}
+      <div class="icon">💡</div>
+      <p class="story">{t(ev.mechanismLessonKey)}</p>
+      <button class="btn primary" onclick={mechanismNext}>{t('common.next')}</button>
     {:else if game.phase === 'decision'}
       <h2>{t(ev.decisionPromptKey)}</h2>
       <div class="col">
-        {#each ev.choices as c}
+        {#each choices as c}
           <button class="btn" onclick={() => choose(c)}>{t(c.labelKey)}</button>
         {/each}
       </div>
+    {:else if game.phase === 'decided' && game.choice}
+      <div class="fb {decidedCls}">{t(game.choice.feedbackKey)}</div>
+      <button class="btn primary" onclick={afterDecision}>
+        {game.choice.result === 'retry' ? t('common.retry') : t('common.next')}
+      </button>
+    {:else if game.phase === 'variability'}
+      <div class="icon">🍊</div>
+      <p class="story">{t('var.story')}</p>
+      <button class="btn primary" onclick={variabilityNext}>{t('common.next')}</button>
+    {:else if game.phase === 'fruits'}
+      <FruitSort />
     {/if}
   </div>
 </div>
@@ -113,11 +104,6 @@
     font-size: 30px;
     font-weight: 800;
   }
-  .row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
   .col {
     display: flex;
     flex-direction: column;
@@ -135,32 +121,23 @@
     font-size: 24px;
     line-height: 1.5;
   }
-  .hint {
-    font-size: 14px;
-    color: var(--dim);
-  }
   .time {
     font-size: 16px;
     color: var(--dim);
   }
-  .status {
-    font-size: 30px;
-    font-weight: 800;
-  }
-  .status.good,
-  .fb.good {
-    color: var(--green);
-  }
-  .status.warn {
-    color: var(--grape);
-  }
-  .status.bad,
-  .fb.bad {
-    color: var(--toxic);
-  }
   .fb {
     font-size: 24px;
     font-weight: 800;
+    line-height: 1.4;
+  }
+  .fb.good {
+    color: var(--green);
+  }
+  .fb.warn {
+    color: var(--grape);
+  }
+  .fb.bad {
+    color: var(--toxic);
   }
   .dots {
     font-size: 56px;
@@ -171,17 +148,5 @@
     50% {
       opacity: 0.3;
     }
-  }
-  .hold {
-    background: linear-gradient(135deg, var(--water-top), var(--water-bot));
-    border-radius: 16px;
-    padding: 18px 44px;
-    font-size: 18px;
-    font-weight: 800;
-    color: #fff;
-    touch-action: none;
-  }
-  .hold:active {
-    transform: scale(0.97);
   }
 </style>

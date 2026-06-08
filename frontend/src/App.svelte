@@ -35,7 +35,7 @@
     }
   })
 
-  const playPhases = ['dose', 'dosing', 'doseDone', 'story', 'knowledge', 'lesson', 'decision', 'settling']
+  const playPhases = ['dose', 'dosing', 'reveal', 'story', 'planCheck', 'mechanism', 'decision', 'decided', 'variability', 'settling', 'fruits']
   // the torso mock is relevant once we're handling a patient
   let showBar = $derived(
     !!game.level &&

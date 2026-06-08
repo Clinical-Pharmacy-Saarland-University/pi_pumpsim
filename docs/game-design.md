@@ -1,6 +1,6 @@
 # PumpSim — Game Design (v0.6)
 
-> Living document. **Status: v0.6 redesign — see §18 (current).**
+> Living document. **Status: v0.7 — see §19 (current).** (§18 holds the level model.)
 > Context: a university **„Tag der offenen Tür"**, theme **SafePolyMed** (safe
 > polymedication): drug–drug, food–drug, and drug–gene interactions.
 > Core loop changed from twitch-balancing to a **decision game with a slow physical
@@ -635,3 +635,145 @@ patient from a pool · 1 vs 2–3 stacked events (difficulty). Optional session 
 The hold-to-infuse twitch loop and the „Hilf der Familie" 3-patient arc (§12–§17) are
 **replaced** by this decision loop. Reusable as-is: German locale + `t()`, the dark theme,
 the screen-routing/flow shell, and the gauge (→ the fixed-band torso bar).
+
+---
+
+## 19. v0.7 — story framework & finale (CURRENT)
+
+Builds on §18 and keeps its engine unchanged (`target = base × Π(factors)`, the **fixed
+taped band**, the **slow torso**). This section adds the reusable **story framework**: a
+stage system, the **5-band reveal**, **age-adapted copy** (kid/adult on every option,
+feedback and instruction), **tactile elements**, a **decision that drives the torso** (three
+endings), and a **fruit-identification finale**. §18's level model + accuracy framing still
+hold; §19 supersedes its flow. The flagship story **„Die Frühstücks-Falle"** is built; its
+authoritative spec is [`docs/stories/fruehstuecks-falle.md`](stories/fruehstuecks-falle.md).
+
+### Design pillars
+1. **Transfer knowledge *and* have fun.**
+2. **Never invent pharmacology that isn't real.** (Wrong answers are real pitfalls, not fiction.)
+3. **The slow pump can't do twitch** → fast play lives **on the screen**; the physical
+   torso shows the **settled aftermath**.
+4. **A story = data.** Engine + finale are shared; stories 2–6 just fill in content.
+
+### Flow
+```
+ Intro ──▶ [ Stage ]×N ──▶ Strategy ──▶ Finale ──▶ Debrief
+ patient    beat + element   what to do   fruit ID   stars +
+ (age copy) + 5-band reveal  (→ torso)    (photos)   „Wusstest du?"
+```
+> **Full per-story spec (authoritative): [`docs/stories/fruehstuecks-falle.md`](stories/fruehstuecks-falle.md).**
+
+### 1. Intro — patient + age register
+Each user string has two registers: **`young`** (warm, concrete — „Herr Schmidt hat zu
+viel Fett im Blut") and **`adult`** (precise, real terms — „…nimmt Simvastatin 40 mg gegen
+erhöhtes Cholesterin"). Same flow for both; `young` may use fewer/simpler options. Gene
+stories set the patient **trait** here. Bar pre-filled to baseline (below band).
+
+### 2. Stages (the middle) — beat + element + reveal
+Each stage = **setup beat → one interaction element → effect on level → reveal**.
+**Element library** (reusable across stories):
+| Element | Player does | Real skill |
+|---|---|---|
+| `knowledge` | MC: „Was passiert mit dem Spiegel?" | mechanism understanding |
+| `planCheck` *(tactile)* | tap the conflicting entry in the *Medikationsplan* | what a pharmacist does |
+| `discernment` *(tactile)* | pick which item interacts (Grapefruit/Apfel/Wasser) | discernment / distractor |
+| `decision` | what do you do? (reduce/stop/switch/nothing) | clinical decision |
+Correct answers/decisions bank **Stabilität** (drives the finale difficulty).
+
+### The 5-band Reveal („the surprise")
+The slow bar **creeps** into one of five bands; each shows a patient face + a one-line
+consequence. The creep *is* the suspense (you don't know where it stops):
+| Band | Range | Reading |
+|---|---|---|
+| viel zu wenig | `< 45` (critical-low) | wirkt gar nicht |
+| zu wenig | `45–55` | wirkt zu schwach |
+| 🟢 im Fenster | `55–70` (band) | genau richtig |
+| zu viel | `70–80` | Nebenwirkungen drohen |
+| viel zu viel | `> 80` (critical-high) | gefährlich → instant loss |
+Numbers = §18 defaults, all tunable in the engine/config.
+
+### 3. Strategy — the decision drives the torso (no needle)
+The fix is a **`decision`**, and each option **moves the torso to its zone** with feedback
+(always say why). There's **no titration mini-game** — for an unpredictable interaction you
+wouldn't dose-chase, so the *choice* is the skill. Each option maps to an **outcome**:
+- **win** — the real fix → torso back into the band → on to the finale.
+- **overdose** — a dangerous move → torso over the critical line → loss.
+- **underdose** — a workaround that fails (e.g. *variable* inhibition) → torso under → loss.
+- **retry** — a harmless-but-wrong trap → explain + choose again.
+
+**Rule:** *every answer is explained first*; harmless-wrong **retries**, dangerous/failed
+moves **lose** (with the real consequence + retry). The taped band is fixed, so the drama is
+*which zone you land in* (the 5-band reveal), not a precision input.
+*(We tried an on-screen titration „needle" and removed it: titrating around grapefruit is
+unrealistic, and it punished the player who picked the right answer.)*
+
+### 4. The fruit finale (the visual closer)
+After the **winning fix**, a grid of **6 real fruit photos** (multi-select): *„Welche Früchte können
+denselben Ärger machen?"*. Tap every fruit that inhibits CYP3A4, confirm → each tile reveals
+its true status + a lesson. Teaches the real nuance: **Grapefruit + Pomelo + Bitterorange**
+interact (furanocoumarins); **Orange/Mandarine/Zitrone** don't — it's *not* „all citrus".
+- Photos are **downloaded from Wikimedia Commons and bundled** in `frontend/public/fruits/`
+  (offline-safe for the kiosk); attribution in `fruits/CREDITS.txt` (mostly CC BY-SA; lemon PD).
+- This replaced an earlier „Ramipril / not-all-drugs" epilogue; that nuance survives as a
+  debrief line. (Generic shape, reusable: any story can swap in its own 6-item identification.)
+
+### 5. Debrief & scoring
+- **Win** = ends in band. **Stars (summed, N/3):** ⭐ in band · ⭐ detective correct first try ·
+  ⭐ fruit finale perfect first try.
+- **Lose** = ends over (Überdosis) or under (Unterdosiert) → **0 ⭐**, show the *real
+  consequence* + the lesson + **quick retry**.
+- **„Wusstest du?"** takeaways, age-adapted — adults also get the compound names
+  (Bergamottin, 6′,7′-Dihydroxybergamottin).
+
+### Reusable story shape (data — engine + finale are shared)
+```
+Story = {
+  patient + drug + condition,        // + age-register copy (young | adult)
+  trait?,                            // gene stories: set at intro (e.g. poor metaboliser ×1.3)
+  stages: [ { beat, element, effect } ],   // element ∈ {knowledge, planCheck, discernment, decision}
+  strategy: { options:[ { label, feedback, result, adultOnly? } ] },  // result ∈ win|overdose|underdose|retry
+  finale?: { fruitGame },            // optional visual closer (6-item identify, with photos)
+  debrief: { stars, facts },
+}
+```
+**Per-story finale framing.** Grapefruit/statin = a **decision** (no antidote, no titration).
+Other stories can use a real precision/timing mechanic *where it's honest* — e.g. an overdose
+story with **antidote-in-time** (paracetamol → N-acetylcystein, best within ~8 h), opioid →
+Naloxon, Warfarin → Vitamin K. Pick the mechanic that matches the real medicine.
+
+### Flagship: „Die Frühstücks-Falle" (the blueprint)
+The title/icon deliberately don't name grapefruit (no spoiler); the culprit is hidden in a
+loaded breakfast and the player must identify it.
+| # | Beat | Element | Torso | Reveal / result |
+|---|---|---|---|---|
+| 0 | **Intro** — Herr Schmidt, 68, Simvastatin (age copy) | — | 40 | Ziel: ins grüne Fenster |
+| 1 | **Standarddosis** — one tap (guided tutorial fill) | guided | 40 → 62 | 🟢 im Fenster |
+| 2 | **Loaded breakfast** — Joggen, Müsli + Apfel + Birne, Kaffee, Grapefruitsaft | `story` | 62 → 76 ↑ | ⚠️ zu viel |
+| 3 | **Detektiv** — „Was war's?" (Apfel/Birne/Kaffee/Grapefruit/Joggen/Müdigkeit) | `discernment` | — | per-item feedback |
+| 4 | **Mechanismus** — CYP3A4-Lektion (Apfel/Birne/Kaffee harmlos) | lesson | — | — |
+| 5 | **Strategie** — „Wie reagierst du?" (→ torso) | `decision` | per choice (↓) | feedback per choice |
+| 6 | **Frucht-Finale** *(win only)* — 6 Fotos: welche Früchte? | multi-select | steady green | „nicht jede Zitrusfrucht" |
+| 7 | **Outcome** — ⭐ + „Wusstest du?" (×2) | — | — | win / Überdosis / Unterdosiert |
+
+**Strategy options (beat 5) — each moves the torso:**
+- ✅ **Grapefruit weglassen** → 76 → 62 (green) → **WIN** → fruit finale.
+- ⚠️ **Dosis senken** *(adults only)* → looks fixed (76→62), then a **Variabilität** beat (the
+  grapefruit amount swings) drops him under → **LOSE: Unterdosiert**.
+- ❌ **zeitversetzt einnehmen** — *trap* (CYP3A4 block lasts **days**) → explain + **retry**.
+- ❌❌ **Dosis erhöhen** → 76 → 90 (critical) → **LOSE: Überdosis**.
+
+**Accuracy (the „don't invent" anchor):** grapefruit inhibits **intestinal CYP3A4** via
+furanocoumarins (**bergamottin, 6′,7′-dihydroxybergamottin**) → simvastatin ↑ → myopathy /
+rhabdomyolysis; the effect persists **days** and the amount **varies per glass** (so
+dose-chasing underdoses). Fix = drop the grapefruit (or switch to a non-CYP3A4 statin,
+Pravastatin/Rosuvastatin). **No antidote** → the fix is a *decision*, not a titration.
+
+### Decided defaults (this session — change anytime)
+- **Length:** tutorial dose → breakfast → detective → mechanism → strategy → (fruit finale) →
+  outcome (~2–3 min).
+- **No needle:** the strategy decision moves the torso; **three endings** (win / Überdosis /
+  Unterdosiert) + a retry trap. „Dosis senken" → deterministic underdose (variability beat).
+- **Fruit finale = all-citrus hard mode:** Grapefruit/Pomelo/Bitterorange interact; Orange/
+  Mandarine/Zitrone don't.
+- **Numbers:** §18 defaults — band `[55,70]`, baseline `40`, critical `80`/`35`, 5-band
+  cutoffs as above.

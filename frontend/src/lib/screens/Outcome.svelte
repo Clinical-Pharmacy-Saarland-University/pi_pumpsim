@@ -25,6 +25,7 @@
   <div class="dyk">
     <span class="lbl">{t('out.dyk')}</span>
     <p>{t('out.dyk.text')}</p>
+    {#if game.outcome === 'win'}<p class="second">{t('out.dyk2.text')}</p>{/if}
   </div>
 
   <div class="actions">
@@ -96,6 +97,12 @@
     margin-top: 6px;
     font-size: 18px;
     line-height: 1.5;
+  }
+  .dyk .second {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    color: var(--dim);
   }
   .actions {
     display: flex;

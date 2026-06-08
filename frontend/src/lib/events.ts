@@ -1,24 +1,46 @@
-// The authored event pool + patient(s) + dose options. A play draws & shuffles
-// events from here (see game.svelte.ts). All user text is locale keys.
+// The authored content for a story (§19 / per-story spec): patient, the interaction
+// event (loaded story → detective → mechanism → strategy), and the fruit finale.
+// All user text is locale keys (each resolves a kid/adult register via t()).
+// The strategy DECISION drives the torso directly (no needle): each choice has a
+// `result` that the engine turns into a torso movement + ending.
 
 export const DOSE = { low: 50, standard: 62, high: 74 } as const
 export type DoseKey = keyof typeof DOSE
 
-export type Apply =
-  | { kind: 'setBase'; base: number }
-  | { kind: 'removeFactor'; factorId: string }
-  | { kind: 'none' }
+export type DecisionResult = 'win' | 'overdose' | 'underdose' | 'retry'
 
 export interface Choice {
   id: string
   labelKey: string
-  apply: Apply
+  feedbackKey: string // shown after picking (always say why)
   correct: boolean
+  result: DecisionResult
+  adultOnly?: boolean // hidden for the `young` register
 }
 
-export interface Knowledge {
+/** One option in the "what caused it?" detective beat; the culprit(s) `interacts`. */
+export interface PlanItem {
+  id: string
+  labelKey: string
+  interacts: boolean
+  feedbackKey: string // per-item explanation (why it is / isn't the cause)
+}
+export interface PlanCheck {
   promptKey: string
-  options: { id: string; labelKey: string; correct: boolean }[]
+  items: PlanItem[]
+}
+
+/** One fruit tile in the finale; furanocoumarin-containing citrus `interacts`. */
+export interface Fruit {
+  id: string
+  img: string
+  labelKey: string
+  interacts: boolean
+}
+/** The finale (after a winning fix): pick every fruit that interacts like grapefruit. */
+export interface FruitGame {
+  promptKey: string
+  fruits: Fruit[]
   lessonKey: string
 }
 
@@ -29,9 +51,11 @@ export interface GameEvent {
   storyKey: string
   factorId?: string // multiplier this event adds when it fires
   factor?: number
-  knowledge: Knowledge
+  planCheck?: PlanCheck // detective: which item caused it?
+  mechanismLessonKey: string // shown after the detective beat
   decisionPromptKey: string
   choices: Choice[]
+  fruitGame?: FruitGame
 }
 
 export interface Patient {
@@ -45,47 +69,50 @@ export const PATIENTS: Patient[] = [
   { id: 'schmidt', nameKey: 'p.schmidt.name', lineKey: 'p.schmidt.line', drugKey: 'd.simvastatin' },
 ]
 
-const upDownNone = (correct: 'up' | 'down' | 'none') => [
-  { id: 'up', labelKey: 'opt.up', correct: correct === 'up' },
-  { id: 'down', labelKey: 'opt.down', correct: correct === 'down' },
-  { id: 'none', labelKey: 'opt.none', correct: correct === 'none' },
-]
-
 export const EVENTS: Record<string, GameEvent> = {
   grapefruit: {
     id: 'grapefruit',
     type: 'FDI',
-    icon: '🍊',
+    icon: '🥣',
     storyKey: 'ev.grapefruit.story',
     factorId: 'cyp3a4',
     factor: 1.22,
-    knowledge: {
-      promptKey: 'ev.grapefruit.q',
-      options: upDownNone('up'),
-      lessonKey: 'ev.grapefruit.lesson',
+    // detective: all items were mentioned in the breakfast; only grapefruit interacts
+    planCheck: {
+      promptKey: 'detect.prompt',
+      items: [
+        { id: 'apfel', labelKey: 'detect.apfel', interacts: false, feedbackKey: 'detect.fb.apfel' },
+        { id: 'birne', labelKey: 'detect.birne', interacts: false, feedbackKey: 'detect.fb.birne' },
+        { id: 'kaffee', labelKey: 'detect.kaffee', interacts: false, feedbackKey: 'detect.fb.kaffee' },
+        { id: 'grapefruit', labelKey: 'detect.grapefruit', interacts: true, feedbackKey: 'detect.fb.grapefruit' },
+        { id: 'jog', labelKey: 'detect.jog', interacts: false, feedbackKey: 'detect.fb.jog' },
+        { id: 'tired', labelKey: 'detect.tired', interacts: false, feedbackKey: 'detect.fb.tired' },
+      ],
     },
+    mechanismLessonKey: 'ev.grapefruit.lesson',
     decisionPromptKey: 'dec.prompt',
     choices: [
-      { id: 'reduce', labelKey: 'dec.reduce', apply: { kind: 'setBase', base: DOSE.low }, correct: true },
-      { id: 'stopgf', labelKey: 'dec.stopGrapefruit', apply: { kind: 'removeFactor', factorId: 'cyp3a4' }, correct: true },
-      { id: 'nothing', labelKey: 'dec.nothing', apply: { kind: 'none' }, correct: false },
-      { id: 'increase', labelKey: 'dec.increase', apply: { kind: 'setBase', base: DOSE.high }, correct: false },
+      // ✅ the real fix → torso back into band → WIN (→ fruit finale)
+      { id: 'stopgf', labelKey: 'dec.stopGrapefruit', feedbackKey: 'dec.fb.stopGrapefruit', correct: true, result: 'win' },
+      // ⚠️ workaround (adults only) → looks fixed, then variability → UNDERDOSE loss
+      { id: 'reduce', labelKey: 'dec.reduce', feedbackKey: 'dec.fb.reduce', correct: false, result: 'underdose', adultOnly: true },
+      // ❌ trap → explain + retry (CYP3A4 block lasts days)
+      { id: 'spaceout', labelKey: 'dec.spaceOut', feedbackKey: 'dec.fb.spaceOut', correct: false, result: 'retry' },
+      // ❌❌ dangerous → over the critical line → OVERDOSE loss
+      { id: 'increase', labelKey: 'dec.increase', feedbackKey: 'dec.fb.increase', correct: false, result: 'overdose' },
     ],
-  },
-  apfel: {
-    id: 'apfel',
-    type: 'distractor',
-    icon: '🍎',
-    storyKey: 'ev.apfel.story',
-    knowledge: {
-      promptKey: 'ev.apfel.q',
-      options: upDownNone('none'),
-      lessonKey: 'ev.apfel.lesson',
+    // finale: which other fruits cause the same CYP3A4 trouble? (not "all citrus")
+    fruitGame: {
+      promptKey: 'fruits.prompt',
+      lessonKey: 'fruits.lesson',
+      fruits: [
+        { id: 'grapefruit', img: '/fruits/grapefruit.jpg', labelKey: 'fruit.grapefruit', interacts: true },
+        { id: 'pomelo', img: '/fruits/pomelo.jpg', labelKey: 'fruit.pomelo', interacts: true },
+        { id: 'bitterorange', img: '/fruits/bitterorange.jpg', labelKey: 'fruit.bitterorange', interacts: true },
+        { id: 'orange', img: '/fruits/orange.jpg', labelKey: 'fruit.orange', interacts: false },
+        { id: 'mandarine', img: '/fruits/mandarine.jpg', labelKey: 'fruit.mandarine', interacts: false },
+        { id: 'zitrone', img: '/fruits/zitrone.jpg', labelKey: 'fruit.zitrone', interacts: false },
+      ],
     },
-    decisionPromptKey: 'dec.prompt',
-    choices: [
-      { id: 'nothing', labelKey: 'dec.nothing', apply: { kind: 'none' }, correct: true },
-      { id: 'reduce', labelKey: 'dec.reduce', apply: { kind: 'setBase', base: DOSE.low }, correct: false },
-    ],
   },
 }

@@ -12,10 +12,17 @@ export const LOCALES: { id: Locale; name: string }[] = [
   { id: 'ar', name: 'العربية' },
 ]
 
-export const i18n = $state({ locale: 'de' as Locale })
+export type Age = 'young' | 'adult'
+
+// `age` lets a single key carry two registers: t('foo') prefers 'foo.{age}'
+// (warm/simple for kids, precise/clinical for adults) and falls back to 'foo'.
+export const i18n = $state({ locale: 'de' as Locale, age: 'young' as Age })
 
 export function setLocale(l: Locale): void {
   i18n.locale = l
+}
+export function setAgeLocale(a: Age): void {
+  i18n.age = a
 }
 
 const de: Record<string, string> = {
@@ -39,7 +46,7 @@ const de: Record<string, string> = {
   'common.cancel': 'Abbrechen',
 
   // story cards (title + short blurb)
-  'story.grapefruit.title': 'Die Grapefruit-Falle',
+  'story.grapefruit.title': 'Die Frühstücks-Falle',
   'story.grapefruit.desc': 'Cholesterin senken – aber Vorsicht beim Frühstück. (Nahrung)',
   'story.johanniskraut.title': 'Das Kräuter-Problem',
   'story.johanniskraut.desc': 'Ein pflanzliches Mittel mischt sich ein. (Pflanze/Arznei)',
@@ -63,19 +70,25 @@ const de: Record<string, string> = {
   // patient + drug
   'p.schmidt.name': 'Herr Schmidt',
   'p.schmidt.line': 'Herr Schmidt, 68 – zu hohes Cholesterin',
+  'p.schmidt.line.young': 'Herr Schmidt, 68 – sein Blut hat zu viel Fett (Cholesterin).',
+  'p.schmidt.line.adult': 'Herr Schmidt, 68 – erhöhtes Cholesterin (Hypercholesterinämie).',
   'd.simvastatin': 'Simvastatin',
   'briefing.goal': 'Stell {name} mit {drug} sicher ein – bring den Spiegel in den grünen Bereich.',
+  'briefing.goal.young':
+    'Hilf {name}! Gib ihm sein Medikament {drug} so, dass der Spiegel genau im grünen Bereich landet – nicht zu wenig und nicht zu viel.',
+  'briefing.goal.adult':
+    'Stell {name} mit {drug} therapeutisch sicher ein: Der Wirkstoff-Spiegel soll im grünen Fenster liegen – darunter wirkt es nicht, darüber drohen Nebenwirkungen.',
 
-  // dose
-  'dose.prompt': 'Welche Dosis gibst du?',
-  'dose.low': 'niedrig',
-  'dose.standard': 'standard',
-  'dose.high': 'hoch',
-  'dose.arcadeHint': 'oder: HALTEN zum Dosieren – im grünen Bereich loslassen',
-  'dose.hold': 'HALTEN',
-  'dose.settled.in': 'Im grünen Bereich – gut eingestellt!',
-  'dose.settled.under': 'Noch zu wenig …',
-  'dose.settled.over': 'Zu viel!',
+  // dose — the opening is a guided tutorial: give the standard dose, watch the
+  // torso rise into the green window (teaches the window; not a graded choice).
+  'dose.startTitle': 'Erste Einstellung',
+  'dose.startPrompt': '{name} bekommt die Standarddosis {drug}.',
+  'dose.startPrompt.young':
+    '{name} bekommt sein Medikament {drug}. Schau, wie der Spiegel langsam in den grünen Bereich steigt!',
+  'dose.startPrompt.adult':
+    '{name} wird neu auf {drug} eingestellt – mit der üblichen Standarddosis.',
+  'dose.give': 'Standarddosis geben',
+  'dose.rising': 'Der Spiegel steigt …',
   'timejump': 'Eine Woche später …',
 
   // knowledge
@@ -85,35 +98,129 @@ const de: Record<string, string> = {
   'q.correct': 'Richtig!',
   'q.wrong': 'Nicht ganz …',
 
-  // decision
-  'dec.prompt': 'Wie reagierst du?',
-  'dec.reduce': 'Dosis reduzieren',
-  'dec.stopGrapefruit': 'Grapefruit weglassen',
-  'dec.nothing': 'Nichts ändern',
-  'dec.increase': 'Dosis erhöhen',
+  // 5-band reveal („die Überraschung")
+  'reveal.way_low': 'Viel zu wenig',
+  'reveal.low': 'Zu wenig',
+  'reveal.in': 'Genau richtig 🟢',
+  'reveal.high': 'Zu viel ⚠️',
+  'reveal.way_high': 'Viel zu viel 🛑',
+  'reveal.way_low.sub': 'Der Spiegel ist viel zu niedrig – das Medikament wirkt nicht.',
+  'reveal.low.sub': 'Knapp unter dem grünen Bereich – es wirkt noch zu schwach.',
+  'reveal.in.sub': 'Im grünen Bereich – {name} ist gut eingestellt!',
+  'reveal.high.sub': 'Über dem grünen Bereich – jetzt drohen Nebenwirkungen.',
+  'reveal.way_high.sub': 'Gefährlich hoch – so wird es giftig!',
+  'reveal.redose': 'Nochmal dosieren',
 
-  // events
+  // detective: which of the morning's items raised the level?
+  'detect.prompt': 'Was hat den Wirkstoff-Spiegel steigen lassen?',
+  'detect.prompt.young': 'Detektiv-Frage: Was hat den Spiegel steigen lassen?',
+  'detect.apfel': '🍎 Der Apfel',
+  'detect.birne': '🍐 Die Birne',
+  'detect.kaffee': '☕ Der Kaffee',
+  'detect.grapefruit': '🍊 Der Grapefruitsaft',
+  'detect.jog': '🏃 Das Joggen',
+  'detect.tired': '😴 Müde von der Arbeit',
+  // per-item feedback (always say why)
+  'detect.fb.grapefruit': 'Richtig erkannt – die Grapefruit war’s!',
+  'detect.fb.grapefruit.adult': 'Korrekt – der Grapefruitsaft.',
+  'detect.fb.apfel': 'Nein – ein Apfel ist harmlos. Denk an die Grapefruit!',
+  'detect.fb.apfel.adult': 'Nein – Apfel beeinflusst den Abbau nicht.',
+  'detect.fb.birne': 'Nein – eine Birne ist harmlos. Denk an die Grapefruit!',
+  'detect.fb.birne.adult': 'Nein – Birne beeinflusst den Abbau nicht.',
+  'detect.fb.kaffee': 'Nein – Kaffee macht hier keinen Ärger.',
+  'detect.fb.kaffee.adult': 'Nein – Kaffee ist hier unkritisch.',
+  'detect.fb.jog': 'Nein – Joggen ist sogar gut fürs Herz!',
+  'detect.fb.jog.adult': 'Nein – körperliche Aktivität ist nicht das Problem.',
+  'detect.fb.tired': 'Nein – Müdigkeit verändert den Spiegel nicht.',
+  'detect.fb.tired.adult': 'Nein – Müdigkeit hat keinen Einfluss auf den Spiegel.',
+
+  // decision / strategy
+  'dec.prompt': 'Wie reagierst du?',
+  'dec.prompt.young': 'Was tust du jetzt?',
+  'dec.reduce': 'Dosis senken',
+  'dec.stopGrapefruit': 'Grapefruit weglassen',
+  'dec.spaceOut': 'Grapefruit & Tablette zeitversetzt einnehmen',
+  'dec.increase': 'Dosis erhöhen',
+  // per-choice feedback (always say why)
+  'dec.fb.stopGrapefruit': 'Genau – ohne Grapefruit sinkt der Spiegel wieder. Der sauberste Weg!',
+  'dec.fb.stopGrapefruit.adult':
+    'Richtig – Grapefruit absetzen; das Enzym erholt sich, der Spiegel normalisiert sich. Bevorzugte Lösung.',
+  'dec.fb.reduce': 'Mal sehen … aber Vorsicht: die Grapefruit-Menge schwankt von Tag zu Tag.',
+  'dec.fb.reduce.adult':
+    'Senkt den Spiegel zwar – aber bei schwankender Grapefruit-Menge ist die Hemmung unberechenbar. Riskant.',
+  'dec.fb.spaceOut': 'Bringt leider nichts – die Grapefruit wirkt noch tagelang nach. Versuch’s nochmal.',
+  'dec.fb.spaceOut.adult':
+    'Wirkungslos – die CYP3A4-Hemmung hält Tage an; zeitlicher Abstand hilft nicht. Nochmal.',
+  'dec.fb.increase': 'Gefährlich! Noch mehr Wirkstoff – jetzt wird es giftig für die Muskeln.',
+  'dec.fb.increase.adult':
+    'Gefährlich – mehr Substrat bei gehemmtem Abbau → toxischer Spiegel, Rhabdomyolyse-Risiko.',
+
+  // 5b — variability (only after „Dosis senken")
+  'var.story': 'Mal trinkt Herr Schmidt ein großes Glas Grapefruit, mal ein kleines – mal gar keins. Die Menge schwankt …',
+  'var.story.adult':
+    'Im Wochenverlauf schwankt die getrunkene Grapefruit-Menge – und damit die Stärke der CYP3A4-Hemmung. Bei fest gesenkter Dosis schwankt der Spiegel mit.',
+
+  // event — a loaded breakfast (the culprit is hidden among harmless items)
   'ev.grapefruit.story':
-    'Herr Schmidt strahlt: „Ich trinke jetzt jeden Morgen ein großes Glas Grapefruitsaft – gesund, oder?“ 🍊',
-  'ev.grapefruit.q': 'Was passiert mit dem Simvastatin-Spiegel?',
+    'Wochenlang läuft alles super! Doch eines Morgens, nach dem Joggen, frühstückt Herr Schmidt kräftig: Müsli mit Apfel und Birne, dazu ein Kaffee und ein großes Glas Grapefruitsaft.',
+  'ev.grapefruit.story.young':
+    'Wochenlang läuft alles super! 🎉 Doch eines Morgens, nach dem Joggen, frühstückt Herr Schmidt so richtig: Müsli mit Apfel und Birne, dazu ein Kaffee und ein großes Glas Grapefruitsaft.',
+  'ev.grapefruit.story.adult':
+    'Über Wochen ist Herr Schmidt stabil eingestellt. Eines Morgens – nach dem Joggen – frühstückt er ausgiebig: Müsli mit Apfel und Birne, ein Kaffee und ein großes Glas Grapefruitsaft.',
+  // mechanism lesson (after the detective reveals the grapefruit)
   'ev.grapefruit.lesson':
-    'Grapefruit hemmt das Abbau-Enzym CYP3A4 – Simvastatin wird langsamer abgebaut und sammelt sich an. Der Spiegel steigt.',
-  'ev.apfel.story': 'Herr Schmidt isst zum Frühstück einen Apfel. 🍎',
-  'ev.apfel.q': 'Was passiert mit dem Simvastatin-Spiegel?',
-  'ev.apfel.lesson':
-    'Ein Apfel ist harmlos – keine Wechselwirkung. Nicht jede Kleinigkeit verändert die Dosis!',
+    'Der Grapefruitsaft hemmt das Abbau-Enzym CYP3A4 – Simvastatin sammelt sich an, der Spiegel steigt. Apfel, Birne und Kaffee sind harmlos.',
+  'ev.grapefruit.lesson.young':
+    'Der Grapefruitsaft bremst das „Aufräum-Enzym“ (CYP3A4) – dann wird Simvastatin langsamer abgebaut und es wird zu viel. Apfel, Birne und Kaffee sind dagegen völlig harmlos.',
+  'ev.grapefruit.lesson.adult':
+    'Grapefruit hemmt CYP3A4 in der Darmwand – Simvastatin wird langsamer verstoffwechselt und kumuliert, der Spiegel (und das Muskelschaden-Risiko) steigt. Apfel, Birne und Kaffee beeinflussen CYP3A4 nicht.',
+
+  // finale: fruit-identification game (which fruits interact like grapefruit?)
+  'fruits.prompt': 'Welche Früchte können denselben Ärger machen wie die Grapefruit? Wähle alle aus.',
+  'fruits.confirm': 'Bestätigen',
+  'fruits.correct': 'Perfekt – alle richtig erkannt!',
+  'fruits.wrong': 'Nicht ganz – schau dir die Auflösung an.',
+  'fruits.badge': 'Wechselwirkung',
+  'fruits.credit': 'Fotos: Wikimedia Commons',
+  'fruits.lesson':
+    'Grapefruit, Pomelo und Bitterorange bremsen CYP3A4 – Orange, Mandarine und Zitrone nicht. „Zitrusfrucht" allein ist also noch kein Problem.',
+  'fruits.lesson.young':
+    'Grapefruit, Pomelo und Bitterorange bremsen das Enzym (CYP3A4) – Orange, Mandarine und Zitrone nicht. Es ist also nicht „jede Zitrusfrucht"!',
+  'fruits.lesson.adult':
+    'Grapefruit, Pomelo und Bitterorange enthalten die Furanocumarine Bergamottin und 6′,7′-Dihydroxybergamottin, die CYP3A4 hemmen. Süßorange, Mandarine und Zitrone praktisch nicht – „Zitrus" allein sagt also nichts.',
+  'fruit.grapefruit': 'Grapefruit',
+  'fruit.pomelo': 'Pomelo',
+  'fruit.bitterorange': 'Bitterorange',
+  'fruit.orange': 'Orange',
+  'fruit.mandarine': 'Mandarine',
+  'fruit.zitrone': 'Zitrone',
 
   // outcome
   'out.win.title': 'Sicher eingestellt! 🎉',
   'out.win.sub': '{name} ist im grünen Bereich.',
   'out.over.title': 'Überdosis! ⚠️',
   'out.over.sub': 'Zu viel Simvastatin → Muskelschäden (Rhabdomyolyse).',
-  'out.under.title': 'Wirkt nicht …',
+  'out.over.sub.young': 'Zu viel! Das kann die Muskeln schädigen.',
+  'out.over.sub.adult': 'Überdosis → Muskelschäden (Rhabdomyolyse).',
+  'out.under.title': 'Unterdosiert …',
   'out.under.sub': 'Zu wenig Wirkstoff → das Cholesterin bleibt zu hoch.',
+  'out.under.sub.young':
+    'Mal mehr, mal weniger Grapefruit – mit der kleineren Dosis ist jetzt zu wenig Wirkstoff da. Das Cholesterin bleibt hoch.',
+  'out.under.sub.adult':
+    'Schwankende Grapefruit-Menge → schwankende Hemmung → mit gesenkter Dosis fällt der Spiegel unter das Fenster. Cholesterin bleibt unkontrolliert. Deshalb: Grapefruit weglassen.',
   'out.stars': '{n} von 3 Sternen',
   'out.dyk': 'Wusstest du?',
   'out.dyk.text':
     'Grapefruitsaft kann den Abbau vieler Medikamente bremsen – eine echte Nahrungs-Wechselwirkung.',
+  'out.dyk.text.young':
+    'Grapefruit kann den Abbau von Medikamenten ausbremsen. Nicht jedes Essen verträgt sich mit jeder Tablette!',
+  'out.dyk.text.adult':
+    'Grapefruit hemmt CYP3A4 über Furanocumarine (Bergamottin, 6′,7′-Dihydroxybergamottin) und kann den Spiegel vieler Medikamente erhöhen – der Effekt hält tagelang an.',
+  'out.dyk2.text':
+    'Und: Grapefruit ist nicht bei jedem Medikament ein Problem – nur bei bestimmten (CYP3A4).',
+  'out.dyk2.text.young': 'Und: Grapefruit stört nicht jedes Medikament – nur manche!',
+  'out.dyk2.text.adult':
+    'Und: Grapefruit beeinflusst nur bestimmte Wirkstoffe (CYP3A4-Substrate), längst nicht alle.',
 
   // admin
   'admin.title': 'Admin / Kalibrierung',
@@ -137,7 +244,7 @@ const en: Record<string, string> = {
   // story select
   'stories.title': 'Choose a story',
   'common.back': 'Back',
-  'story.grapefruit.title': 'The Grapefruit Trap',
+  'story.grapefruit.title': 'The Breakfast Trap',
   'story.grapefruit.desc': 'Lower cholesterol — but watch out at breakfast. (Food)',
   'story.johanniskraut.title': 'The Herbal Problem',
   'story.johanniskraut.desc': 'A herbal remedy gets involved. (Herb/drug)',
@@ -163,7 +270,7 @@ const fr: Record<string, string> = {
   // story select
   'stories.title': 'Choisis une histoire',
   'common.back': 'Retour',
-  'story.grapefruit.title': 'Le piège du pamplemousse',
+  'story.grapefruit.title': 'Le piège du petit-déjeuner',
   'story.grapefruit.desc': 'Faire baisser le cholestérol – mais attention au petit-déjeuner. (Alimentation)',
   'story.johanniskraut.title': 'Le problème des plantes',
   'story.johanniskraut.desc': "Un remède à base de plantes s'en mêle. (Plante/médicament)",
@@ -189,7 +296,7 @@ const nl: Record<string, string> = {
   // story select
   'stories.title': 'Kies een verhaal',
   'common.back': 'Terug',
-  'story.grapefruit.title': 'De grapefruitval',
+  'story.grapefruit.title': 'De ontbijtval',
   'story.grapefruit.desc': 'Cholesterol verlagen – maar pas op bij het ontbijt. (Voeding)',
   'story.johanniskraut.title': 'Het kruidenprobleem',
   'story.johanniskraut.desc': 'Een kruidenmiddel mengt zich erin. (Plant/geneesmiddel)',
@@ -214,7 +321,7 @@ const ar: Record<string, string> = {
   // story select
   'stories.title': 'اختر قصة',
   'common.back': 'رجوع',
-  'story.grapefruit.title': 'فخ الجريب فروت',
+  'story.grapefruit.title': 'فخ الفطور',
   'story.grapefruit.desc': 'خفض الكوليسترول – لكن انتبه عند الفطور. (غذاء)',
   'story.johanniskraut.title': 'مشكلة الأعشاب',
   'story.johanniskraut.desc': 'مكمّل عشبي يتدخل. (نبات/دواء)',
@@ -231,7 +338,10 @@ const ar: Record<string, string> = {
 const dicts: Record<Locale, Record<string, string>> = { de, en, fr, nl, ar }
 
 export function t(key: string, params?: Params): string {
-  let s = dicts[i18n.locale][key] ?? de[key] ?? key
+  const dict = dicts[i18n.locale]
+  const aged = `${key}.${i18n.age}`
+  // age-specific → age-specific(de) → plain → plain(de) → key
+  let s = dict[aged] ?? de[aged] ?? dict[key] ?? de[key] ?? key
   if (params) for (const [k, v] of Object.entries(params)) s = s.replaceAll(`{${k}}`, String(v))
   return s
 }

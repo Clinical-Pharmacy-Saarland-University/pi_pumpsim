@@ -1,8 +1,12 @@
 // Client-side game (Svelte 5 runes). Backend owns the level ("torso twin");
 // this owns language/age, story selection, the play flow, reset-between-runs,
-// and scoring. target = base × Π(factors).
+// and scoring. The per-story flow (see docs/stories/fruehstuecks-falle.md):
+//   dose → reveal → story(loaded) → drift → reveal → detective → mechanism →
+//   strategy → [decided feedback] → {win→fruit finale | overdose | underdose(5b) | retry}
+//   → outcome. The strategy decision drives the torso directly (no needle).
 import { api, connectLevel } from './api'
-import { DOSE, type Apply, type Choice, type GameEvent, type Patient } from './events'
+import { DOSE, type Choice, type GameEvent, type Patient } from './events'
+import { setAgeLocale } from './locale.svelte'
 import { STORIES, type Story } from './stories'
 import type { LevelState } from './types'
 
@@ -12,17 +16,21 @@ export type Phase =
   | 'briefing'
   | 'dose'
   | 'dosing'
-  | 'doseDone'
+  | 'reveal'
   | 'story'
-  | 'knowledge'
-  | 'lesson'
+  | 'planCheck'
+  | 'mechanism'
   | 'decision'
+  | 'decided'
+  | 'variability'
   | 'settling'
+  | 'fruits'
   | 'resetting'
   | 'outcome'
 
 export type Outcome = 'win' | 'over' | 'under'
 export type AgeGroup = 'young' | 'adult'
+export type RevealKind = 'dose' | 'event'
 
 function shuffle<T>(a: T[]): T[] {
   const r = a.slice()
@@ -45,7 +53,10 @@ export const game = $state({
   base: DOSE.standard as number,
   factors: {} as Record<string, number>,
   lastCorrect: null as boolean | null,
-  score: { kCorrect: 0, kTotal: 0, dCorrect: 0, dTotal: 0 },
+  revealKind: 'dose' as RevealKind,
+  choice: null as Choice | null, // the picked strategy (for the 'decided' feedback)
+  // pc = detective (first-try clean), k = fruit finale (all correct)
+  score: { kCorrect: 0, kTotal: 0, pcCorrect: 0, pcTotal: 0 },
   outcome: null as Outcome | null,
   stars: 0,
 })
@@ -56,6 +67,20 @@ function computeTarget(): number {
   let t = game.base
   for (const f of Object.values(game.factors)) t *= f
   return Math.max(0, Math.min(100, t))
+}
+
+// torso targets for the decision branches (robust to tuning the band)
+const bandMid = () => {
+  const s = game.level
+  return s ? (s.band_low + s.band_high) / 2 : 62
+}
+const underTarget = () => {
+  const s = game.level
+  return s ? s.band_low - 5 : 50
+}
+const overTarget = () => {
+  const s = game.level
+  return s ? s.critical_high + 10 : 90
 }
 
 function moveTo(target: number, then: () => void) {
@@ -69,7 +94,10 @@ function moveTo(target: number, then: () => void) {
   }
 }
 
-const PLAY_PHASES = ['dose', 'dosing', 'doseDone', 'story', 'knowledge', 'lesson', 'decision', 'settling']
+const PLAY_PHASES = [
+  'dose', 'dosing', 'reveal', 'story', 'planCheck', 'mechanism', 'decision', 'decided',
+  'variability', 'settling', 'fruits',
+]
 
 function onLevel(s: LevelState) {
   game.level = s
@@ -96,6 +124,7 @@ export function init(): () => void {
 // --- start / navigation ---
 export function setAge(a: AgeGroup): void {
   game.ageGroup = a
+  setAgeLocale(a)
 }
 export function begin(): void {
   game.phase = 'storyselect'
@@ -115,16 +144,19 @@ export function selectStory(story: Story): void {
   game.patient = story.patient
   game.events = shuffle(story.events).map((ev) => ({
     ...ev,
-    knowledge: { ...ev.knowledge, options: shuffle(ev.knowledge.options) },
+    planCheck: ev.planCheck ? { ...ev.planCheck, items: shuffle(ev.planCheck.items) } : undefined,
+    fruitGame: ev.fruitGame ? { ...ev.fruitGame, fruits: shuffle(ev.fruitGame.fruits) } : undefined,
     choices: shuffle(ev.choices),
   }))
   game.idx = 0
   game.base = DOSE.standard
   game.factors = {}
-  game.score = { kCorrect: 0, kTotal: 0, dCorrect: 0, dTotal: 0 }
+  game.score = { kCorrect: 0, kTotal: 0, pcCorrect: 0, pcTotal: 0 }
+  game.choice = null
   game.outcome = null
   game.stars = 0
   game.lastCorrect = null
+  game.revealKind = 'dose'
   game.phase = 'briefing'
 }
 
@@ -149,77 +181,109 @@ export function backToStories(): void {
   prepareThen(() => (game.phase = 'storyselect'))
 }
 
-// --- dosing ---
-export function chooseDose(key: keyof typeof DOSE): void {
-  game.base = DOSE[key]
+// --- dosing (guided tutorial: give the standard dose → fills into the window) ---
+export function giveDose(): void {
+  game.base = DOSE.standard
   game.phase = 'dosing'
-  moveTo(computeTarget(), () => (game.phase = 'doseDone'))
-}
-export function holdStart(): void {
-  game.phase = 'dosing'
-  api.setTarget(game.level?.capacity ?? 100)
-}
-export function holdStop(): void {
-  const lvl = Math.round(game.level?.level ?? DOSE.standard)
-  game.base = lvl
-  api.setTarget(lvl)
-  setTimeout(() => (game.phase = 'doseDone'), 400)
+  moveTo(computeTarget(), () => showReveal('dose'))
 }
 
-// --- events ---
+// --- the 5-band reveal ("am I in the window?") ---
+function showReveal(kind: RevealKind): void {
+  game.revealKind = kind
+  game.phase = 'reveal'
+}
+export function revealNext(): void {
+  if (game.revealKind === 'dose') {
+    if (game.level?.in_band) startStory()
+    else game.phase = 'dose' // missed the window → dose again
+  } else {
+    game.phase = 'planCheck' // the event reveal → go find the cause
+  }
+}
+
+// --- event: loaded story → drift → reveal → detective → mechanism ---
 function currentEvent(): GameEvent {
   return game.events[game.idx]
 }
-export function startEvents(): void {
+function startStory(): void {
   game.idx = 0
   game.phase = 'story'
 }
-export function toKnowledge(): void {
-  game.lastCorrect = null
-  game.phase = 'knowledge'
-}
-export function answerKnowledge(optionId: string): void {
+export function toEventReveal(): void {
+  // the interaction fires: apply its factor, drift, then reveal where it landed
   const ev = currentEvent()
-  const opt = ev.knowledge.options.find((o) => o.id === optionId)
-  const correct = !!opt?.correct
-  game.lastCorrect = correct
-  game.score.kTotal++
-  if (correct) game.score.kCorrect++
   if (ev.factorId && ev.factor) game.factors[ev.factorId] = ev.factor
-  api.setTarget(computeTarget())
-  game.phase = 'lesson'
+  game.phase = 'settling'
+  moveTo(computeTarget(), () => showReveal('event'))
 }
-export function toDecision(): void {
-  game.lastCorrect = null
+export function planCheckDone(firstTryCorrect: boolean): void {
+  game.score.pcTotal++
+  if (firstTryCorrect) game.score.pcCorrect++
+  game.phase = 'mechanism'
+}
+export function mechanismNext(): void {
   game.phase = 'decision'
 }
+
+// --- strategy decision (drives the torso; always explain first) ---
 export function choose(choice: Choice): void {
-  game.lastCorrect = choice.correct
-  game.score.dTotal++
-  if (choice.correct) game.score.dCorrect++
-  applyChoice(choice.apply)
-  game.phase = 'settling'
-  moveTo(computeTarget(), afterSettle)
+  game.choice = choice
+  game.lastCorrect = choice.result === 'win'
+  game.phase = 'decided' // show the per-choice feedback before anything moves
 }
-function applyChoice(a: Apply): void {
-  if (a.kind === 'setBase') game.base = a.base
-  else if (a.kind === 'removeFactor') delete game.factors[a.factorId]
-}
-function afterSettle(): void {
-  if (game.idx < game.events.length - 1) {
-    game.idx++
-    game.phase = 'story'
-  } else {
-    finishOutcome()
+export function afterDecision(): void {
+  const c = game.choice
+  if (!c) return
+  switch (c.result) {
+    case 'retry':
+      game.phase = 'decision'
+      break
+    case 'win':
+      game.factors = {} // grapefruit dropped → settles back to the dose
+      game.phase = 'settling'
+      moveTo(computeTarget(), startFruits)
+      break
+    case 'overdose':
+      game.phase = 'settling'
+      moveTo(overTarget(), finishOutcome) // crosses the critical line → loss
+      break
+    case 'underdose':
+      game.phase = 'settling'
+      moveTo(bandMid(), startVariability) // looks fixed first…
+      break
   }
 }
+
+// --- 5b: variability (only after „Dosis senken") → drops under the band ---
+function startVariability(): void {
+  game.phase = 'variability'
+}
+export function variabilityNext(): void {
+  game.phase = 'settling'
+  moveTo(underTarget(), finishOutcome)
+}
+
+// --- finale: identify which fruits interact like grapefruit (win path only) ---
+function startFruits(): void {
+  game.lastCorrect = null
+  game.phase = 'fruits'
+}
+export function fruitsDone(allCorrect: boolean): void {
+  game.lastCorrect = allCorrect
+  game.score.kTotal++
+  if (allCorrect) game.score.kCorrect++
+  finishOutcome()
+}
+
+// --- outcome + stars ---
 function finishOutcome(): void {
   const z = game.level?.zone ?? 'under'
   game.outcome = z === 'in' ? 'win' : z === 'over' || z === 'critical_high' ? 'over' : 'under'
   if (game.outcome === 'win') {
-    const perfectK = game.score.kCorrect === game.score.kTotal
-    const perfectD = game.score.dCorrect === game.score.dTotal
-    game.stars = 1 + (perfectK ? 1 : 0) + (perfectD ? 1 : 0)
+    const detectiveClean = game.score.pcTotal > 0 && game.score.pcCorrect === game.score.pcTotal
+    const fruitClean = game.score.kTotal > 0 && game.score.kCorrect === game.score.kTotal
+    game.stars = 1 + (detectiveClean ? 1 : 0) + (fruitClean ? 1 : 0)
   } else {
     game.stars = 0
   }
