@@ -7,6 +7,7 @@
   import Briefing from './lib/screens/Briefing.svelte'
   import Play from './lib/screens/Play.svelte'
   import DdiPlay from './lib/screens/DdiPlay.svelte'
+  import OrganPlay from './lib/screens/OrganPlay.svelte'
   import Resetting from './lib/screens/Resetting.svelte'
   import Outcome from './lib/screens/Outcome.svelte'
   import Admin from './lib/screens/Admin.svelte'
@@ -64,7 +65,8 @@
     {:else if game.phase === 'outcome'}
       <Outcome />
     {:else if game.phase === 'play2'}
-      {#if game.story?.id === 'ddi'}<DdiPlay />{/if}
+      {#if game.story?.id === 'ddi'}<DdiPlay />
+      {:else if game.story?.id === 'organ'}<OrganPlay />{/if}
     {:else if playPhases.includes(game.phase)}
       <Play />
     {/if}
