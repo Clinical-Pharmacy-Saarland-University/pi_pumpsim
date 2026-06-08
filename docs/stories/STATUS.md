@@ -2,21 +2,23 @@
 
 _Autonomous session, 2026-06-08._
 
-## Playable now (3 of 6)
+## Playable now (4 of 6)
 | # | Story | Drug × interaction | Unique mechanic | Engine |
 |---|---|---|---|---|
 | 1 | **Die Frühstücks-Falle** | Grapefruit × Simvastatin (CYP3A4) | multi-select photo grid | v1 (template) |
+| 3 | **Drei Zwillinge, eine Pille** | Codein / CYP2D6 (gene) | same-dose **triptych** (predict 3 genotypes) | v2 |
 | 4 | **Der Funken-Plan** | Clarithromycin × Phenprocoumon (DDI) | tap-tap **pairing** (connect the clash) | v2 |
 | 5 | **Die Nieren-Skala** | Metformin × low eGFR (organ) | read **gauge → set dose dial** | v2 |
 
-All three: 3 endings (win / over / under), DE young+adult copy, headless sim + browser smoke verified, `svelte-check` clean.
+All four: 3 distinct endings, DE young+adult copy, **headless sim (`npx tsx sim/<id>.sim.ts`) + browser smoke** verified, `svelte-check` clean.
 
-## Designed, not yet built (3) — specs ready in this folder
+## Designed, not yet built (2) — specs ready in this folder
 | # | Story | Drug × interaction | Unique mechanic | Build note |
 |---|---|---|---|---|
-| 2 | **Das Teeküchen-Regal** ([johanniskraut.md](johanniskraut.md)) | Ciclosporin × Johanniskraut (induction) | real-time **leak-defense** (drag patches) | needs an anti-auto-trip flag (keep drift > 35 until committed) |
-| 3 | **Drei Zwillinge, eine Pille** ([gene.md](gene.md)) | Codein / CYP2D6 | same-dose **triptych** (sort 3 genotypes) | run the UM demo in a non-play phase / cap at 79 |
-| 6 | **Der Wochen-Pillenplan** ([adherence.md](adherence.md)) | Lamotrigin (adherence) | **build-a-week timeline**, play it back | per-day moves via `setTarget(target, rate)`; verify FI wording (SJS/TEN) |
+| 2 | **Das Teeküchen-Regal** ([johanniskraut.md](johanniskraut.md)) | Ciclosporin × Johanniskraut (induction) | real-time **leak-defense** (drag patches) | needs an anti-auto-trip flag (keep drift > 35 until committed); only-downward (no overdose) |
+| 6 | **Der Wochen-Pillenplan** ([adherence.md](adherence.md)) | Lamotrigin (adherence) | **build-a-week timeline**, play it back | per-day moves via `driveTo(target, rate)`; verify FI wording (SJS/TEN) |
+
+These two are the ones the audit flagged as needing the most engine care (real-time / multi-day). Their cards are `available: false`.
 
 Their story cards are `available: false` in `stories.ts` (tapping them is a no-op — the app stays fully working).
 
