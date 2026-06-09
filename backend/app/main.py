@@ -83,7 +83,13 @@ class CalibrationModel(BaseModel):
     rate_in: float | None = Field(default=None, ge=0)
     rate_out: float | None = Field(default=None, ge=0)
     dead_space_ml: float | None = Field(default=None, ge=0)
+    empty_overpump_s: float | None = Field(default=None, gt=0, le=600)
+    prime_in_ml: float | None = Field(default=None, ge=0)
     samples: list[CalibSample] = Field(default_factory=list)
+
+
+class EmptyRequest(BaseModel):
+    seconds: float | None = Field(default=None, gt=0, le=600)
 
 
 @app.get("/api/state")
@@ -147,10 +153,39 @@ def get_calibration() -> dict:
 
 @app.post("/api/admin/calibration")
 def post_calibration(c: CalibrationModel) -> dict:
-    data = c.model_dump()
+    # merge: only overwrite the fields the client actually sent, so the wizard
+    # (deadbands/rates/samples) and the admin (reset params) don't clobber each other
+    data = load_calibration()
+    data.update(c.model_dump(exclude_unset=True))
     save_calibration(data)
-    if c.rate_in:
-        _runner().set_rate(c.rate_in)  # apply the fill rate live
+    if data.get("rate_in"):
+        _runner().set_rate(data["rate_in"])  # apply the fill rate live
+    return {"ok": True}
+
+
+@app.post("/api/admin/empty")
+def admin_empty(req: EmptyRequest) -> dict:
+    """Overpump OUT to guarantee an empty torso (pulls air at the end — fine for a
+    peristaltic pump). Duration: request override, else calibration, else 90 s."""
+    cal = load_calibration()
+    seconds = float(req.seconds or cal.get("empty_overpump_s") or 90.0)
+    _runner().run_sequence([{"dir": "out", "speed": 1.0, "seconds": seconds}])
+    return {"ok": True}
+
+
+@app.post("/api/admin/calibrated_reset")
+def admin_calibrated_reset() -> dict:
+    """Home-then-dose: overpump empty, then pump IN a known volume (+ tube dead-space)
+    so the torso starts each game at a calibrated level."""
+    cal = load_calibration()
+    empty_s = float(cal.get("empty_overpump_s") or 90.0)
+    rate_in = float(cal.get("rate_in") or 0.0)
+    prime_ml = float(cal.get("prime_in_ml") or 0.0)
+    dead = float(cal.get("dead_space_ml") or 0.0)
+    steps: list[dict] = [{"dir": "out", "speed": 1.0, "seconds": empty_s}]
+    if rate_in > 0 and prime_ml > 0:
+        steps.append({"dir": "in", "speed": 1.0, "seconds": (prime_ml + dead) / rate_in})
+    _runner().run_sequence(steps)
     return {"ok": True}
 
 

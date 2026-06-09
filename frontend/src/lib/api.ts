@@ -60,5 +60,7 @@ export const api = {
       return r.json()
     },
     saveCalibration: (c: unknown) => post('/api/admin/calibration', c),
+    empty: (seconds?: number) => post('/api/admin/empty', { seconds: seconds ?? null }),
+    calibratedReset: () => post('/api/admin/calibrated_reset'),
   },
 }

@@ -1,0 +1,10 @@
+{
+  "deadband_in": null,
+  "deadband_out": null,
+  "rate_in": null,
+  "rate_out": null,
+  "dead_space_ml": null,
+  "empty_overpump_s": null,
+  "prime_in_ml": null,
+  "samples": []
+}

@@ -15,6 +15,8 @@ export interface Calibration {
   rate_in: number | null
   rate_out: number | null
   dead_space_ml: number | null
+  empty_overpump_s: number | null // seconds to overpump OUT to guarantee empty
+  prime_in_ml: number | null // ml to pump IN after empty for a calibrated start level
   samples: CalibSample[]
 }
 
@@ -44,6 +46,8 @@ export function buildCalibration(
     rate_in: at100('in'),
     rate_out: at100('out'),
     dead_space_ml: deadSpaceMl,
+    empty_overpump_s: null,
+    prime_in_ml: null,
     samples,
   }
 }

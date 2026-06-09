@@ -29,6 +29,9 @@ duty→flow `samples`, and `dead_space_ml`. It's **per-machine + gitignored**, l
 (`rate_in` is applied to the pump). To inspect or back it up:
 - `cat ~/pi_pumpsim/backend/calibration.json`
 - `scp -i ~/.ssh/pumpsim dose@<pi-ip>:~/pi_pumpsim/backend/calibration.json .`
+- **Default in git:** `backend/calibration.default.json` is the committed baseline, used when no
+  local `calibration.json` exists. To make your measured numbers the default for every machine:
+  `cp backend/calibration.json backend/calibration.default.json` and commit it.
 
 The manual steps below are the underlying procedure — use them by hand or to cross-check a number.
 
@@ -95,6 +98,20 @@ once we build the model-follower:
   is defined consistently.
 Record as `dead_space_ml`. The calibration file already has the field; the wizard doesn't capture it
 yet, so enter it by hand in `backend/calibration.json` for now.
+
+## 5c. Between-games reset (home-then-dose) — the calibrated start
+Without a level sensor, each game starts from a *known* level by homing to empty, then dosing a
+fixed volume (like a 3D printer homing to an endstop, then moving by steps):
+- **`empty_overpump_s`** — run OUT long enough to drain the fullest torso **plus** margin, so it
+  pulls air and is guaranteed empty. Set it generously (peristaltic pumps run dry safely).
+- **`prime_in_ml`** — the volume to pump back IN for the game's start level. The backend adds
+  `dead_space_ml` automatically (it must re-prime the empty tubing before water reaches the torso).
+
+Set both in **admin → Entleeren / Reset** (saved into the calibration file), then:
+- **„⏏ Entleeren (überpumpen)"** — drain to empty (this is also the manual "set state to empty").
+- **„Kalibrierter Reset"** — empty, then prime in `prime_in_ml` → a repeatable start level.
+
+The game's between-runs reset will call „Kalibrierter Reset" on real hardware (model-follower work).
 
 ## 6. Derived timings (game feel)
 - `t_reset` (full drain) ≈ `capacity_ml / rate_out` — set the reset screen to comfortably exceed this.

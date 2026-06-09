@@ -523,6 +523,14 @@ const de: Record<string, string> = {
   'admin.volume': 'Volumen (ml)',
   'admin.duration': 'Dauer (s)',
   'admin.saveCalc': 'Messung als Rate speichern',
+  'admin.resetSection': 'Entleeren / Reset',
+  'admin.emptyTime': 'Leer-Pumpzeit (s)',
+  'admin.primeMl': 'Vorfüllen (ml)',
+  'admin.saveParams': 'Werte speichern',
+  'admin.empty': '⏏ Entleeren (überpumpen)',
+  'admin.calibReset': 'Kalibrierter Reset',
+  'admin.resetHint':
+    'Entleeren pumpt OUT über die Torso-Menge hinaus (zieht am Ende Luft – für eine Peristaltikpumpe unkritisch). „Kalibrierter Reset" entleert und füllt dann „Vorfüllen" ml wieder ein.',
 
   // guided calibration wizard
   'cal.startGuided': 'Geführte Kalibrierung starten',

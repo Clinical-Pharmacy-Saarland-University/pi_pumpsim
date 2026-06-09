@@ -45,6 +45,30 @@ def test_set_rate_updates_calibration():
     assert r.snapshot()["pump_rate_ml_s"] == 3.5
 
 
+def test_run_sequence_drives_then_advances():
+    r = _runner()
+    r.run_sequence(
+        [
+            {"dir": "out", "speed": 1.0, "seconds": 2},
+            {"dir": "in", "speed": 0.5, "seconds": 3},
+        ]
+    )
+    assert r.manual is True
+    assert r.pump.direction == "out" and r.pump.speed == 1.0
+    r._advance_seq()  # next step
+    assert r.pump.direction == "in" and r.pump.speed == 0.5
+    r._advance_seq()  # past the end -> stop
+    assert r.pump.direction == "stop"
+
+
+def test_manual_drive_clears_a_pending_sequence():
+    r = _runner()
+    r.run_sequence([{"dir": "out", "speed": 1.0, "seconds": 5}, {"dir": "in", "speed": 1.0, "seconds": 5}])
+    r.manual_drive("in", 0.3)
+    assert r._seq == []
+    assert r.pump.direction == "in" and r.pump.speed == 0.3
+
+
 def test_controller_manual_step_moves_level_and_pins_target():
     c = LevelController()  # rate 4.0, baseline 42
     start = c.level

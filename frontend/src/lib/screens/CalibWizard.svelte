@@ -2,14 +2,7 @@
   import { onMount } from 'svelte'
   import { t } from '../locale.svelte'
   import { api } from '../api'
-  import {
-    mlPerSec,
-    round1,
-    buildCalibration,
-    FLOW_TARGETS,
-    type CalibSample,
-    type Dir,
-  } from '../calib'
+  import { mlPerSec, round1, FLOW_TARGETS, type CalibSample, type Dir } from '../calib'
   import NumPad from '../NumPad.svelte'
 
   let { onclose }: { onclose: () => void } = $props()
@@ -120,7 +113,17 @@
   }
 
   function save() {
-    api.admin.saveCalibration(buildCalibration(deadbandIn, deadbandOut, samples)).catch(() => {})
+    // send only what the wizard measured -> backend merges (exclude_unset), so
+    // dead_space_ml / empty_overpump_s / prime_in_ml set elsewhere are preserved
+    api.admin
+      .saveCalibration({
+        deadband_in: deadbandIn,
+        deadband_out: deadbandOut,
+        rate_in: rateOf('in'),
+        rate_out: rateOf('out'),
+        samples,
+      })
+      .catch(() => {})
     phase = 'done'
   }
 

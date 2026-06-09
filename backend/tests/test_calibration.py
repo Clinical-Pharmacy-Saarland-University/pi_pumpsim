@@ -48,3 +48,12 @@ def test_save_ignores_extra_keys(tmp_path):
     loaded = load_calibration(p)
     assert loaded["rate_in"] == 9.0
     assert "bogus" not in loaded
+
+
+def test_reset_params_round_trip(tmp_path):
+    p = tmp_path / "c.json"
+    save_calibration({"empty_overpump_s": 90, "prime_in_ml": 50}, p)
+    loaded = load_calibration(p)
+    assert loaded["empty_overpump_s"] == 90
+    assert loaded["prime_in_ml"] == 50
+    assert loaded["deadband_in"] is None  # other keys default

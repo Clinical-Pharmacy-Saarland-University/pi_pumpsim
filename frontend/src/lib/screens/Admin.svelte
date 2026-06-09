@@ -26,6 +26,10 @@
   let durS = $state(30)
   let calcRate = $derived(mlPerSec(volMl, durS))
 
+  // empty/reset params (loaded from calibration on mount)
+  let emptyS = $state(0)
+  let primeMl = $state(0)
+
   let cap = $derived(game.level?.capacity ?? 100)
   let isReal = $derived(game.level?.backend === 'real')
 
@@ -40,6 +44,13 @@
   // enter manual mode on open, leave (auto resumes + pump stops) on close
   onMount(() => {
     api.admin.manual(true).catch(() => {})
+    api.admin
+      .getCalibration()
+      .then((c) => {
+        emptyS = c.empty_overpump_s ?? 0
+        primeMl = c.prime_in_ml ?? 0
+      })
+      .catch(() => {})
     return () => {
       api.admin.manual(false).catch(() => {})
     }
@@ -69,6 +80,12 @@
     held = null
     api.admin.reset().catch(() => {})
   }
+  const saveResetParams = () =>
+    api.admin
+      .saveCalibration({ empty_overpump_s: emptyS || null, prime_in_ml: primeMl || null })
+      .catch(() => {})
+  const doEmpty = () => api.admin.empty(emptyS || undefined).catch(() => {})
+  const doCalibReset = () => api.admin.calibratedReset().catch(() => {})
 
   const pct = (f: number | undefined) => Math.round((f ?? 0) * 100)
 </script>
@@ -166,6 +183,24 @@
             0})
         </div>
         <div>{t('admin.running')}: <b>{game.level?.pump_running ? 'AN' : 'aus'}</b></div>
+      </div>
+
+      <div class="block">
+        <div class="bhead">{t('admin.resetSection')}</div>
+        <div class="mrow">
+          <button class="numbtn" onclick={() => openPad(t('admin.emptyTime'), 's', (v) => (emptyS = v))}>
+            <span>{t('admin.emptyTime')}</span><b>{emptyS}</b>
+          </button>
+          <button class="numbtn" onclick={() => openPad(t('admin.primeMl'), 'ml', (v) => (primeMl = v))}>
+            <span>{t('admin.primeMl')}</span><b>{primeMl}</b>
+          </button>
+        </div>
+        <button class="msave" onclick={saveResetParams}>{t('admin.saveParams')}</button>
+        <div class="resetrow">
+          <button class="empty" onclick={doEmpty}>{t('admin.empty')}</button>
+          <button class="calibreset" onclick={doCalibReset}>{t('admin.calibReset')}</button>
+        </div>
+        <p class="deadband">{t('admin.resetHint')}</p>
       </div>
 
       <button class="reset" onclick={resetBaseline}>{t('admin.reset')}</button>
@@ -432,6 +467,26 @@
   .readout {
     font-size: 16px;
     line-height: 1.9;
+  }
+  .resetrow {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .resetrow button {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 8px;
+    font-weight: 800;
+  }
+  .empty {
+    background: #d6453b;
+    color: #fff;
+  }
+  .calibreset {
+    background: #3b7bd6;
+    color: #fff;
   }
   .reset {
     background: var(--surface);

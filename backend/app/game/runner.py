@@ -21,7 +21,8 @@ class LevelRunner:
         self.ctrl = LevelController()
         self.dt = 1.0 / max(1, tick_hz)
         self.manual = False
-        self._manual_remaining: float | None = None  # seconds left on a timed run
+        self._manual_remaining: float | None = None  # seconds left on the current step
+        self._seq: list[dict] = []  # queued timed steps (empty / calibrated reset)
         self._listeners: set[asyncio.Queue] = set()
         self._task: asyncio.Task | None = None
 
@@ -46,6 +47,7 @@ class LevelRunner:
     def reset(self) -> None:
         self.manual = False
         self._manual_remaining = None
+        self._seq = []
         self.ctrl.reset(immediate=True)
         self.pump.drive("stop")
 
@@ -53,6 +55,7 @@ class LevelRunner:
     def set_manual(self, on: bool) -> None:
         self.manual = on
         self._manual_remaining = None
+        self._seq = []
         self.pump.drive("stop")
         if not on:
             self.ctrl.target = self.ctrl.level  # don't snap when auto resumes
@@ -60,16 +63,38 @@ class LevelRunner:
     def manual_drive(self, direction: str, speed: float) -> None:
         self.manual = True
         self._manual_remaining = None
+        self._seq = []
         self.pump.drive(direction, speed)
 
     def manual_run(self, direction: str, speed: float, seconds: float) -> None:
         self.manual = True
+        self._seq = []
         self.pump.drive(direction, speed)
         self._manual_remaining = max(0.1, min(120.0, seconds))
 
     def manual_stop(self) -> None:
         self._manual_remaining = None
+        self._seq = []
         self.pump.drive("stop")
+
+    def run_sequence(self, steps: list[dict]) -> None:
+        """Run a list of timed pump steps: [{dir, speed, seconds}, ...].
+
+        Used for empty/overpump and the calibrated reset (drain to empty, then
+        prime in a known volume). Drives in manual mode and auto-advances.
+        """
+        self.manual = True
+        self._seq = [dict(s) for s in steps]
+        self._advance_seq()
+
+    def _advance_seq(self) -> None:
+        if self._seq:
+            step = self._seq.pop(0)
+            self.pump.drive(str(step.get("dir", "stop")), float(step.get("speed", 1.0)))
+            self._manual_remaining = max(0.1, min(600.0, float(step.get("seconds", 0))))
+        else:
+            self._manual_remaining = None
+            self.pump.drive("stop")
 
     def set_rate(self, rate_ml_s: float) -> None:
         self.pump.set_rate(rate_ml_s)
@@ -81,8 +106,11 @@ class LevelRunner:
                 if self._manual_remaining is not None:
                     self._manual_remaining -= self.dt
                     if self._manual_remaining <= 0:
-                        self._manual_remaining = None
-                        self.pump.drive("stop")
+                        if self._seq:
+                            self._advance_seq()  # next step in the sequence
+                        else:
+                            self._manual_remaining = None
+                            self.pump.drive("stop")
                 self.ctrl.manual_step(self.pump.direction, self.pump.speed, self.dt)
             else:
                 self.ctrl.tick(self.dt)
