@@ -227,7 +227,7 @@
   .wiz {
     position: absolute;
     inset: 0;
-    background: rgba(8, 11, 22, 0.99);
+    background: #080b16;
     padding: 14px 24px;
     display: flex;
     flex-direction: column;

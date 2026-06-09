@@ -195,7 +195,7 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    background: rgba(10, 14, 28, 0.98);
+    background: #0a0e1c;
     padding: 18px 24px;
     display: flex;
     flex-direction: column;

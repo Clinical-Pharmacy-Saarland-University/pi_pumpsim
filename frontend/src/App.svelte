@@ -57,7 +57,11 @@
 <div class="device">
   {#if framed}<div class="label">Raspberry Pi · Touch Display 2 · 1280 × 720</div>{/if}
   <div class="pi" class:framed {dir} style="transform: scale({scale})">
-    {#if game.phase === 'start'}
+    {#if showAdmin}
+      <!-- render admin INSTEAD of the screen so the animated Backdrop underneath
+           stops (it's a big GPU drain on the Pi → draggy scroll / laggy taps) -->
+      <Admin onclose={() => (showAdmin = false)} />
+    {:else if game.phase === 'start'}
       <Start onadmin={() => (showAdmin = true)} />
     {:else if game.phase === 'storyselect'}
       <StorySelect />
@@ -76,7 +80,5 @@
     {:else if playPhases.includes(game.phase)}
       <Play />
     {/if}
-
-    {#if showAdmin}<Admin onclose={() => (showAdmin = false)} />{/if}
   </div>
 </div>
