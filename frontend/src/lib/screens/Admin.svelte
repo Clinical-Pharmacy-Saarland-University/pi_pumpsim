@@ -3,7 +3,6 @@
   import { t } from '../locale.svelte'
   import { game } from '../game.svelte'
   import { api } from '../api'
-  import { mlPerSec, round1 } from '../calib'
   import CalibWizard from './CalibWizard.svelte'
   import NumPad from '../NumPad.svelte'
 
@@ -18,13 +17,6 @@
 
   let speed = $state(60) // 0..100 (%)
   let held = $state<Dir | null>(null)
-  let rateInput = $state(2.0)
-  let rateSynced = false
-
-  // flow-measurement helper: enter measured volume + duration -> ml/s
-  let volMl = $state(0)
-  let durS = $state(30)
-  let calcRate = $derived(mlPerSec(volMl, durS))
 
   // empty/reset params (loaded from calibration on mount)
   let emptyS = $state(0)
@@ -32,14 +24,6 @@
 
   let cap = $derived(game.level?.capacity ?? 100)
   let isReal = $derived(game.level?.backend === 'real')
-
-  // prefill the rate field from the backend's calibrated value (once)
-  $effect(() => {
-    if (!rateSynced && game.level) {
-      rateInput = game.level.pump_rate_ml_s ?? 2.0
-      rateSynced = true
-    }
-  })
 
   // enter manual mode on open, leave (auto resumes + pump stops) on close
   onMount(() => {
@@ -70,12 +54,6 @@
   }
   const timed = (dir: Dir, seconds: number) =>
     api.admin.run(dir, speed / 100, seconds).catch(() => {})
-  const setRate = () => api.admin.rate(rateInput).catch(() => {})
-  function saveCalc() {
-    if (calcRate <= 0) return
-    rateInput = round1(calcRate)
-    api.admin.rate(calcRate).catch(() => {})
-  }
   const resetBaseline = () => {
     held = null
     api.admin.reset().catch(() => {})
@@ -145,30 +123,7 @@
     <section class="col">
       <div class="block">
         <div class="bhead">{t('admin.calib')}</div>
-
         <button class="wizbtn" onclick={() => (wizard = true)}>{t('cal.startGuided')}</button>
-
-        <div class="measure">
-          <div class="mlabel">{t('admin.measure')}</div>
-          <div class="mrow">
-            <button class="numbtn" onclick={() => openPad(t('admin.volume'), 'ml', (v) => (volMl = v))}>
-              <span>{t('admin.volume')}</span><b>{volMl}</b>
-            </button>
-            <button class="numbtn" onclick={() => openPad(t('admin.duration'), 's', (v) => (durS = v))}>
-              <span>{t('admin.duration')}</span><b>{durS}</b>
-            </button>
-          </div>
-          <div class="mresult">= <b>{calcRate.toFixed(1)}</b> ml/s</div>
-          <button class="msave" onclick={saveCalc}>{t('admin.saveCalc')}</button>
-        </div>
-
-        <div class="raterow">
-          <button class="numbtn" onclick={() => openPad(t('admin.rate'), 'ml/s', (v) => (rateInput = v))}>
-            <span>{t('admin.rate')}</span><b>{rateInput}</b>
-          </button>
-          <button onclick={setRate}>{t('admin.setRate')}</button>
-        </div>
-        <p class="deadband">{t('admin.deadbandHint')}</p>
       </div>
 
       <div class="readout">
@@ -391,19 +346,6 @@
     font-size: 16px;
     margin-bottom: 12px;
   }
-  .measure {
-    background: rgba(0, 0, 0, 0.22);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px;
-    margin-bottom: 14px;
-  }
-  .mlabel {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--dim);
-    margin-bottom: 10px;
-  }
   .mrow {
     display: flex;
     gap: 10px;
@@ -427,14 +369,6 @@
   .numbtn b {
     font-size: 20px;
   }
-  .mresult {
-    margin: 10px 0;
-    font-size: 18px;
-  }
-  .mresult b {
-    font-size: 24px;
-    color: var(--spm-cyan, #00beca);
-  }
   .msave {
     width: 100%;
     background: var(--spm-cyan, #00beca);
@@ -445,19 +379,6 @@
     font-weight: 800;
   }
 
-  .raterow {
-    display: flex;
-    gap: 10px;
-    align-items: stretch;
-  }
-  .raterow button {
-    background: var(--spm-cyan, #00beca);
-    color: #04222a;
-    border: none;
-    border-radius: 10px;
-    padding: 0 20px;
-    font-weight: 800;
-  }
   .deadband {
     margin: 12px 0 0;
     font-size: 13px;
