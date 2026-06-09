@@ -54,6 +54,19 @@ class LevelController:
             self.level += step if d > 0 else -step
         self.level = _clamp(self.level, 0.0, self.cfg.capacity)
 
+    def manual_step(self, direction: str, speed: float, dt: float) -> None:
+        """Move the level with a manually-jogged pump (admin calibration).
+
+        There is no real level sensor, so this just gives visual feedback on the
+        MiniBar. `target` is kept pinned to `level` so auto mode won't snap on exit.
+        """
+        step = self.rate * max(0.0, min(1.0, speed)) * dt
+        if direction == "in":
+            self.level = _clamp(self.level + step, 0.0, self.cfg.capacity)
+        elif direction == "out":
+            self.level = _clamp(self.level - step, 0.0, self.cfg.capacity)
+        self.target = self.level
+
     @property
     def moving(self) -> bool:
         return abs(self.target - self.level) > 1e-6

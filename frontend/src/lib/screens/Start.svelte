@@ -18,6 +18,21 @@
     }
   }
 
+  // Secret admin (touch): long-press (~1.2 s) the empty top-left corner.
+  let pressTimer: ReturnType<typeof setTimeout> | null = null
+  function cornerDown() {
+    pressTimer = setTimeout(() => {
+      pressTimer = null
+      onadmin()
+    }, 1200)
+  }
+  function cornerUp() {
+    if (pressTimer) {
+      clearTimeout(pressTimer)
+      pressTimer = null
+    }
+  }
+
   const AGES = [
     { id: 'young', emoji: '🧒', key: 'age.young' },
     { id: 'adult', emoji: '🧑', key: 'age.adult' },
@@ -26,6 +41,17 @@
 
 <div class="start">
   <Backdrop />
+
+  <!-- secret admin (touch): long-press the empty top-left corner -->
+  <button
+    class="corner"
+    onpointerdown={cornerDown}
+    onpointerup={cornerUp}
+    onpointerleave={cornerUp}
+    onpointercancel={cornerUp}
+    tabindex="-1"
+    aria-hidden="true"
+  ></button>
 
   <!-- hero ----------------------------------------------------------------- -->
   <header class="hero">
@@ -297,6 +323,20 @@
     background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
     transform: skewX(-20deg);
     animation: sheen 3.4s ease-in-out 1.4s infinite;
+  }
+
+  /* ---- secret admin corner (invisible long-press hotspot) -------------- */
+  .corner {
+    position: absolute;
+    top: 0;
+    inset-inline-start: 0;
+    width: 64px;
+    height: 64px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    z-index: 5;
+    touch-action: none;
   }
 
   /* ---- credit / secret admin ------------------------------------------- */

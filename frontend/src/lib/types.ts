@@ -15,4 +15,11 @@ export interface LevelState {
   critical_high: number
   critical_low: number
   pump_running: boolean
+  // pump / admin telemetry
+  pump_direction: 'in' | 'out' | 'stop'
+  pump_speed: number // 0..1 duty fraction
+  pump_flow_ml_s: number
+  pump_rate_ml_s: number // calibrated full-speed flow
+  manual: boolean
+  backend: string // "mock" | "real"
 }

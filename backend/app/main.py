@@ -24,8 +24,8 @@ runner: LevelRunner | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global runner
-    pump = create_pump(settings.pump_backend, settings.pump_rate_ml_s, settings.pump_gpio_pin)
-    runner = LevelRunner(pump, settings.tick_hz)
+    pump = create_pump(settings)
+    runner = LevelRunner(pump, settings.tick_hz, backend=settings.pump_backend)
     await runner.start()
     print(f"[pumpsim] torso-twin up  |  PUMP_BACKEND={settings.pump_backend}")
     try:
@@ -50,6 +50,23 @@ class TargetRequest(BaseModel):
     rate: float | None = Field(default=None, gt=0)
 
 
+class PumpRequest(BaseModel):
+    dir: str = Field(pattern="^(in|out|stop)$")
+    speed: float = Field(default=1.0, ge=0, le=1)
+
+
+class RunRequest(PumpRequest):
+    seconds: float = Field(gt=0, le=120)
+
+
+class ManualRequest(BaseModel):
+    on: bool
+
+
+class RateRequest(BaseModel):
+    rate_ml_s: float = Field(gt=0)
+
+
 @app.get("/api/state")
 def get_state() -> dict:
     return _runner().snapshot()
@@ -63,6 +80,43 @@ def set_target(req: TargetRequest) -> dict:
 
 @app.post("/api/level/reset")
 def reset_level() -> dict:
+    _runner().reset()
+    return {"ok": True}
+
+
+# --- admin: direct pump control (manual jog + calibration) -----------------
+@app.post("/api/admin/manual")
+def admin_manual(req: ManualRequest) -> dict:
+    _runner().set_manual(req.on)
+    return {"ok": True}
+
+
+@app.post("/api/admin/pump")
+def admin_pump(req: PumpRequest) -> dict:
+    _runner().manual_drive(req.dir, req.speed)
+    return {"ok": True}
+
+
+@app.post("/api/admin/run")
+def admin_run(req: RunRequest) -> dict:
+    _runner().manual_run(req.dir, req.speed, req.seconds)
+    return {"ok": True}
+
+
+@app.post("/api/admin/stop")
+def admin_stop() -> dict:
+    _runner().manual_stop()
+    return {"ok": True}
+
+
+@app.post("/api/admin/rate")
+def admin_rate(req: RateRequest) -> dict:
+    _runner().set_rate(req.rate_ml_s)
+    return {"ok": True}
+
+
+@app.post("/api/admin/reset")
+def admin_reset() -> dict:
     _runner().reset()
     return {"ok": True}
 

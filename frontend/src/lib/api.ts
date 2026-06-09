@@ -38,8 +38,21 @@ async function post(path: string, body?: unknown): Promise<unknown> {
   return res.json()
 }
 
+type Dir = 'in' | 'out' | 'stop'
+
 export const api = {
   /** Tell the torso to move toward `level` (0–100), optionally at a custom rate. */
   setTarget: (level: number, rate?: number) => post('/api/level/target', { level, rate }),
   reset: () => post('/api/level/reset'),
+
+  /** Direct pump control for the admin/calibration screen. speed is 0..1. */
+  admin: {
+    manual: (on: boolean) => post('/api/admin/manual', { on }),
+    pump: (dir: Dir, speed: number) => post('/api/admin/pump', { dir, speed }),
+    run: (dir: Dir, speed: number, seconds: number) =>
+      post('/api/admin/run', { dir, speed, seconds }),
+    stop: () => post('/api/admin/stop'),
+    rate: (rate_ml_s: number) => post('/api/admin/rate', { rate_ml_s }),
+    reset: () => post('/api/admin/reset'),
+  },
 }

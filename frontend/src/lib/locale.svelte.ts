@@ -506,6 +506,19 @@ const de: Record<string, string> = {
   'admin.stop': '■ Stopp',
   'admin.reset': 'Auf Basislinie',
   'admin.close': 'Schließen',
+  'admin.hold': 'gedrückt halten = pumpen',
+  'admin.speed': 'Geschwindigkeit',
+  'admin.timed': 'Zeitlauf (automatisch stoppen)',
+  'admin.calib': 'Kalibrierung',
+  'admin.rate': 'Förderrate (ml/s bei 100 %)',
+  'admin.setRate': 'Speichern',
+  'admin.deadbandHint':
+    'Tipp: Geschwindigkeit langsam erhöhen, bis die Pumpe gerade anläuft = Totband. Dann ml/s messen (z. B. Sekunden für 500 ml) und hier eintragen.',
+  'admin.state': 'Live-Status',
+  'admin.flow': 'Fluss',
+  'admin.dir': 'Richtung',
+  'admin.running': 'Pumpe',
+  'admin.mockNote': 'MOCK-Modus: keine echte Pumpe – nur Simulation.',
 }
 
 // Start-screen translations (test of the t() mechanism). Everything else still

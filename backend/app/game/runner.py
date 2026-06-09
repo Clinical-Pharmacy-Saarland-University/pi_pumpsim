@@ -1,5 +1,10 @@
 """Async runner: ticks the LevelController, drives the pump toward the target,
 and broadcasts level state to WebSocket clients.
+
+Two modes:
+  * auto   — the level moves toward the game's target; the pump follows.
+  * manual — the admin jogs the pump directly (in/out/stop + speed + timed runs)
+             for calibration; the level just mirrors the motion for feedback.
 """
 from __future__ import annotations
 
@@ -10,10 +15,13 @@ from .controller import LevelController
 
 
 class LevelRunner:
-    def __init__(self, pump: Pump, tick_hz: int) -> None:
+    def __init__(self, pump: Pump, tick_hz: int, backend: str = "mock") -> None:
         self.pump = pump
+        self.backend = backend
         self.ctrl = LevelController()
         self.dt = 1.0 / max(1, tick_hz)
+        self.manual = False
+        self._manual_remaining: float | None = None  # seconds left on a timed run
         self._listeners: set[asyncio.Queue] = set()
         self._task: asyncio.Task | None = None
 
@@ -30,31 +38,69 @@ class LevelRunner:
         self.pump.stop()
         self.pump.close()
 
-    # --- commands ---
+    # --- game (auto) commands ---------------------------------------------
     def set_target(self, level: float, rate: float | None = None) -> None:
+        self.manual = False
         self.ctrl.set_target(level, rate)
 
     def reset(self) -> None:
+        self.manual = False
+        self._manual_remaining = None
         self.ctrl.reset(immediate=True)
-        self.pump.stop()
+        self.pump.drive("stop")
 
-    # --- loop ---
+    # --- admin (manual) commands ------------------------------------------
+    def set_manual(self, on: bool) -> None:
+        self.manual = on
+        self._manual_remaining = None
+        self.pump.drive("stop")
+        if not on:
+            self.ctrl.target = self.ctrl.level  # don't snap when auto resumes
+
+    def manual_drive(self, direction: str, speed: float) -> None:
+        self.manual = True
+        self._manual_remaining = None
+        self.pump.drive(direction, speed)
+
+    def manual_run(self, direction: str, speed: float, seconds: float) -> None:
+        self.manual = True
+        self.pump.drive(direction, speed)
+        self._manual_remaining = max(0.1, min(120.0, seconds))
+
+    def manual_stop(self) -> None:
+        self._manual_remaining = None
+        self.pump.drive("stop")
+
+    def set_rate(self, rate_ml_s: float) -> None:
+        self.pump.set_rate(rate_ml_s)
+
+    # --- loop -------------------------------------------------------------
     async def _loop(self) -> None:
         while True:
-            self.ctrl.tick(self.dt)
-            # drive the pump toward the target (mock: just reflects motion;
-            # the IBT-2 RealPump will map direction -> in/out)
-            if self.ctrl.direction == "stop":
-                self.pump.stop()
+            if self.manual:
+                if self._manual_remaining is not None:
+                    self._manual_remaining -= self.dt
+                    if self._manual_remaining <= 0:
+                        self._manual_remaining = None
+                        self.pump.drive("stop")
+                self.ctrl.manual_step(self.pump.direction, self.pump.speed, self.dt)
             else:
-                self.pump.start()
+                self.ctrl.tick(self.dt)
+                direction = self.ctrl.direction
+                self.pump.drive(direction, 1.0 if direction != "stop" else 0.0)
             self._broadcast()
             await asyncio.sleep(self.dt)
 
-    # --- telemetry ---
+    # --- telemetry --------------------------------------------------------
     def snapshot(self) -> dict:
         snap = self.ctrl.snapshot()
         snap["pump_running"] = self.pump.is_running
+        snap["pump_direction"] = self.pump.direction
+        snap["pump_speed"] = round(self.pump.speed, 3)
+        snap["pump_flow_ml_s"] = round(self.pump.flow_ml_s, 3)
+        snap["pump_rate_ml_s"] = round(self.pump.rate_ml_s, 3)
+        snap["manual"] = self.manual
+        snap["backend"] = self.backend
         return snap
 
     def _broadcast(self) -> None:
