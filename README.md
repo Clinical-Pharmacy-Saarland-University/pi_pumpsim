@@ -1,112 +1,91 @@
-# pi_pumpsim
+# pi_pumpsim — SafePolyMed
 
-A touchscreen "game" for demonstrating **pharmacokinetics (PK)** concepts to kids.
-A peristaltic pump (driven by a Raspberry Pi 4) fills a water "avatar" of a person;
-the goal is to reach an **optimal dose** (a target window of water level).
+A touchscreen **"game"** for a university *Tag der offenen Tür* (open day), theme
+**SafePolyMed** — *safe polymedication*: drug–drug (DDI), food–drug (FDI) and drug–gene
+(DGI) interactions. A **peristaltic pump** (Raspberry Pi + IBT-2 H-bridge) fills a
+translucent **3D-printed torso** (~2–3 L) with dyed water; the **water level = the drug
+concentration**, and a **fixed taped band** on the torso is the therapeutic window. The
+player makes dosing decisions on the touchscreen and the torso fills/drains to show the
+result — *the slow pump is the suspense.*
 
-## Hardware (target)
-- Raspberry Pi 4
-- **Raspberry Pi Touch Display 2** (7", 720×1280 native portrait), mounted **landscape ⇒ 1280×720** (rotated 90° via the `vc4-kms-dsi-ili9881-7inch` overlay)
-- Reversible peristaltic pump via an **IBT-2 (BTS7960) H-bridge** (RPWM/LPWM + enables; external motor supply). Wiring + cable colours in [deploy/README.md](deploy/README.md#-pump-wiring--ibt-2-bts7960-h-bridge-dont-skip).
-- Tubing: water reservoir → pump → "person" avatar vessel
+UI is **German-first** (i18n-ready: DE / EN / FR / NL / AR — DE is written, the rest fall
+back to German).
 
-> The UI is designed/verified for **1280×720 landscape**. It's responsive (and
-> stacks to a portrait layout if ever run portrait), but landscape is primary.
-
-## Goals & constraints
-- **a)** Develop UI + logic *without* the Pi for the first iteration (run on a dev PC).
-- **b)** Modern, "cool" touch-first UI.
-- **c)** Pump is **mocked** for the first prototype.
-- **d)** Later: debug/test on real hardware.
-- **e)** Keyboard interface for debug/admin tasks.
-- **f)** Calibration: pump rate, dead volume, target window, accuracy.
-
-## Stack (decided)
-| Layer | Choice |
-|---|---|
-| Frontend | **Svelte + TypeScript + Vite**, SVG/Canvas for avatar & water animation |
-| Backend | **Python FastAPI + Uvicorn** — WebSocket telemetry + REST commands |
-| Config | **Pydantic Settings** — calibration: pump rate, dead volume, target window, tolerance |
-| Pump HAL | `Pump` interface → `MockPump` (dev) / `RealPump` via **`gpiozero`** (Pi), switched by `PUMP_BACKEND=mock\|real` |
-| Sim | Pure-logic PK engine, headless-testable |
-| Pi runtime | Chromium **kiosk** → FastAPI serves the built bundle |
-
-### Architecture (3 layers)
-1. **UI** (Svelte, touch-first) — the game screen
-2. **PK simulation engine** — pure logic (dose → level over time, target window). No UI, no hardware.
-3. **Pump HAL** — one interface, two backends (mock / real GPIO), selected by env var.
-
-This separation is what lets us build & run the whole thing on Windows now (`MockPump`)
-and swap in real GPIO on the Pi later, with the same UI code.
+> **More docs:** [`CLAUDE.md`](CLAUDE.md) (contributor orientation) ·
+> [`docs/game-design.md`](docs/game-design.md) (design) ·
+> [`deploy/README.md`](deploy/README.md) (Pi kiosk + pump wiring) ·
+> [`docs/calibration.md`](docs/calibration.md) (pump calibration).
 
 ## Status
-✅ **Milestone 2 — „Dr. Dosis" first playable** (mock pump, browser, no Pi). The full
-game loop runs: Attract → Intro → Play → Result → „Geschafft!" across a 3-round
-**„Hilf der Familie!"** arc (Max/Paracetamol · Eva/Simvastatin+Grapefruit · Opa/Metoprolol).
-Hold-to-infuse dosing, a live „Spiegel" gauge with the therapeutic window, event
-system (DDI/DGI/FDI modulating clearance), well-being + stars, German UI (i18n-ready),
-hidden admin (`A`). See [docs/game-design.md](docs/game-design.md).
+- **All 6 stories built & playable**, each a distinct mechanic (grapefruit photo-grid ·
+  Johanniskraut leak-defense · gene triptych · DDI pairing · organ gauge→dial · adherence
+  build-a-week). Verified via headless sims + Playwright. DE-only so far.
+- **Deployed on the real Pi** (kiosk, landscape, touch); runs **mock** by default.
+- **Pump works on real hardware** (IBT-2, hardware PWM, VCC **3.3 V**). `RealPump`, an
+  on-screen **admin**, and a **guided calibration wizard** are done. Remaining: calibrate
+  the real torso, then a level→pump *model-follower*.
 
-## Quick start (Windows dev)
-```powershell
-# one-time setup: venv + backend deps + frontend packages
-scripts\setup.ps1
-
-# run backend (:8000) + frontend (:5173) together
-scripts\run-dev.ps1
-# then open http://localhost:5173
+## Architecture (3 layers — build on a PC, swap to the Pi with one env var)
 ```
-Manual / two terminals:
-```powershell
-# terminal 1 — backend
-cd backend; .\.venv\Scripts\Activate.ps1; python -m uvicorn app.main:app --reload --port 8000
-# terminal 2 — frontend
-cd frontend; npm run dev
+Frontend (Svelte) = THE GAME        ──WS/REST──▶   Backend (FastAPI) = "TORSO TWIN"
+language/age, story select, play                    owns the level 0–100, moves it toward
+flow, scoring, reset. Sends a target.               the target at the pump rate; drives →
+                                                    Pump HAL:  MockPump (dev) | RealPump (Pi)
+                                                               via PUMP_BACKEND=mock|real
 ```
-Tests: `cd backend; .\.venv\Scripts\python.exe -m pytest`
+The **backend is dumb on purpose** — it just holds the level and moves it toward a
+`target`. **All game logic lives in the frontend.** On hardware, `RealPump` maps "move
+toward target" → pump IN/OUT over the IBT-2.
 
-## Controls
-- **Play**: tap to start → **hold the syringe** (HALTEN) to dose; keep the level in the
-  green band as it drains and events (grapefruit etc.) disturb it.
-- **Hidden admin** (`A` / `Esc`): jump to any round + live telemetry feed. Never shown
-  during normal play.
+## Stack
+| Layer | Choice |
+|---|---|
+| Frontend | **Svelte 5 (runes) + TypeScript + Vite** |
+| Backend | **Python 3.13 · FastAPI + Uvicorn** — WebSocket level telemetry + REST commands |
+| Config | **Pydantic Settings** (`backend/.env`) |
+| Pump HAL | `Pump` → `MockPump` (dev) / `RealPump` (Pi: `gpiozero` enables + **`rpi-hardware-pwm`** speed), switched by `PUMP_BACKEND` |
+| Pi runtime | `sway` (rotate→landscape) → Chromium **kiosk**; FastAPI serves the built bundle |
 
-## Layout
+## Quick start (Windows dev — no Pi needed)
+[`just`](https://github.com/casey/just) recipes (PowerShell):
 ```
-backend/
-  app/
-    main.py                # FastAPI: game REST + WebSocket GameState, serves built UI
-    config.py              # Settings (env/.env)
-    game/scenarios.py      # the 3-round arc + PK params (bands, clearance, events)
-    game/engine.py         # GameEngine — pure round simulation (unit-tested)
-    game/runner.py         # async loop: engine ↔ pump, broadcast GameState
-    hardware/pump.py       # Pump interface (HAL): mock_pump / real_pump (gpiozero) / factory
-  tests/                   # pytest (game engine + pump)
-frontend/                  # Vite + Svelte 5 + TS
-  src/App.svelte           # screen routing + keyboard (admin)
-  src/lib/game.svelte.ts   # client flow store (which screen, round progression)
-  src/lib/locale.ts        # German strings + t()  (i18n-ready)
-  src/lib/{Gauge,HoldButton,Mascot,PatientFace}.svelte
-  src/lib/screens/{Attract,Intro,Play,Result,Summary,Admin}.svelte
-scripts/setup.ps1, run-dev.ps1   ·   deploy/  (Pi kiosk)
+just setup     # one-time: venv + backend deps + npm install
+just dev       # backend :8000 + frontend :5173  → http://localhost:5173
+just test      # backend pytest
+just check     # svelte-check (frontend type-check)
+just build     # production UI bundle
 ```
+`PUMP_BACKEND=mock` (the default) means the torso is simulated on-screen by a corner
+**MiniBar** — the whole game runs without hardware.
 
-## PK model (current, deliberately simple)
-Pump flow first primes the **dead volume** (tubing); overflow reaches the avatar.
-The avatar level then decays with **first-order elimination** `dL/dt = -k·L`
-(the body clearing the dose). The **target window** `[low, high]` is the
-therapeutic range. All tunable live from the admin panel.
+## How it plays
+`Start (language + age) → StorySelect (6 cards) → Briefing → Dose → [Event → Wissensfrage
+→ slow drift → Decision]* → Outcome (win / lose + stars) → reset`. The level sits in a
+fixed band; an interaction (e.g. grapefruit) makes it **drift** toward a danger line and
+the player must pick the right **decision** to stop it. You can lose: over the band =
+toxic, under = ineffective.
+
+## Hidden admin + calibration
+On the **Start** screen, **triple-tap the SafePolyMed logo** (or press `A`) → a full-screen
+admin: hold-to-pump **IN/OUT**, speed, timed runs, live telemetry, **Entleeren/überpumpen +
+Kalibrierter Reset**, and a **guided calibration wizard** (deadband + flow curve, saved to
+`backend/calibration.json`). Protocol: [`docs/calibration.md`](docs/calibration.md).
+
+## Hardware
+- Raspberry Pi **4 or 5**; official **Touch Display 2** (720×1280, used **landscape**
+  1280×720 — rotated by `sway`).
+- Reversible peristaltic pump via an **IBT-2 (BTS7960)** H-bridge: RPWM/LPWM + enables,
+  **hardware PWM** on GPIO12/13, external motor supply.
+  ⚠️ **Driver VCC must be 3.3 V, not 5 V.** Full wiring + cable colours:
+  [deploy/README.md](deploy/README.md#-pump-wiring--ibt-2-bts7960-h-bridge-dont-skip).
 
 ## Deploy on the Pi (kiosk)
-Pi OS Lite (Bookworm/trixie) + `sway` kiosk (rotates to landscape) + systemd. Code via GitHub.
 ```bash
 git clone https://github.com/Clinical-Pharmacy-Saarland-University/pi_pumpsim.git
 cd pi_pumpsim
-deploy/install.sh        # apt deps, venv, build UI, install + enable services
-sudo reboot              # boots straight into the app, landscape, full-screen
+deploy/install.sh        # apt deps, venv, build UI, pwm overlay + udev, enable services
+sudo reboot              # boots into the app: landscape, full-screen
 deploy/update.sh         # later: git pull → rebuild → restart
 ```
-(Rotation is done by sway — `output * transform 90`; flip to `270` if it's upside-down. No `config.txt` rotation needed.)
-The UI/sim code is identical to dev — only `PUMP_BACKEND` flips to `real`.
-**Full guide (services, pump wiring, display+touch rotation, calibration):**
-[deploy/README.md](deploy/README.md).
+The UI/sim code is identical to dev — only `PUMP_BACKEND` flips to `real`. Full guide
+(services, pump wiring, rotation, calibration): [deploy/README.md](deploy/README.md).

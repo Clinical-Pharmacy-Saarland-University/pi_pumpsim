@@ -42,6 +42,15 @@ After editing: `sudo systemctl restart pumpsim-backend`.
 (Calibration is also live-editable from the on-screen admin panel — **triple-tap the
 SafePolyMed logo** on the Start screen, or press `A`.)
 
+## Calibration
+Run the **guided calibration wizard** from the admin (triple-tap the logo → „Geführte
+Kalibrierung starten"): it finds the deadband and the duty→flow curve (you weigh the water,
+1 g ≈ 1 ml) and saves to **`backend/calibration.json`** (per-machine, gitignored, loaded on
+boot). The committed **`backend/calibration.default.json`** is the fallback baseline — to make
+your numbers the default for every machine, `cp calibration.json calibration.default.json` and
+commit. The admin's **Entleeren / Reset** panel sets the home-then-dose params
+(`empty_overpump_s`, `prime_in_ml`). Full protocol: [`../docs/calibration.md`](../docs/calibration.md).
+
 ## ⚠️ Pump wiring — IBT-2 (BTS7960) H-bridge (don't skip)
 The pump is a reversible DC motor driven by an **IBT-2** H-bridge. The Pi provides
 **logic signals only** — the motor runs off its **own external supply**. Direction is

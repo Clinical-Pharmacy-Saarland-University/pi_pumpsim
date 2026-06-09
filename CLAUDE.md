@@ -1,7 +1,7 @@
 # CLAUDE.md — pi_pumpsim / "SafePolyMed"
 
 Orientation for anyone (human or Claude) working on this repo. For the deep game
-design see [`docs/game-design.md`](docs/game-design.md) (current = **§18, v0.6**); for
+design see [`docs/game-design.md`](docs/game-design.md) (current framework = **§19**, v0.6); for
 the Pi/deploy details see [`deploy/README.md`](deploy/README.md).
 
 ---
@@ -20,13 +20,16 @@ fall back to German).
 
 ## Where we stand (2026-06)
 
-- **Game (v0.6) is built and playable** in the browser (mock, no Pi needed). Verified
-  end-to-end via Playwright.
-- **Deployed and running on the real Pi** (kiosk, landscape, touch) in **mock** mode.
-- **Pump now runs on the bench** (`tools/pump_test.py`, hardware PWM): clean proportional
-  IN/OUT speed. It was a hardware saga — the original driver was dead, the 1st of the replacement
-  2-pack was also bad, and VCC had to be **3.3 V not 5 V**; the 2nd unit on 3.3 V works.
-  `RealPump` is still a placeholder — next is calibration; see *Open work*.
+- **All 6 stories built & playable** (each a distinct mechanic) in the browser (mock) and
+  on the Pi (kiosk). Verified via headless sims + Playwright. DE-only (others fall back).
+- **Deployed on the real Pi** (kiosk, landscape, touch); runs **mock** by default
+  (`PUMP_BACKEND=real` for hardware).
+- **Pump works on real hardware** (IBT-2, hardware PWM, VCC **3.3 V**): `RealPump`, an
+  on-screen **admin** (triple-tap the logo: jog IN/OUT, timed runs, live telemetry,
+  Entleeren/überpumpen + Kalibrierter Reset) and a **guided calibration wizard** are done.
+  Remaining: run calibration on the real torso + a level→pump model-follower; see *Open work*.
+  (Hardware saga: original driver dead, 1st of the replacement 2-pack bad, and VCC had to be
+  **3.3 V not 5 V** — the 2nd unit on 3.3 V works.)
 - Repo: **public** at `github.com/Clinical-Pharmacy-Saarland-University/pi_pumpsim`.
 
 ## The big architecture idea
@@ -65,11 +68,14 @@ with **no code change** (just an env var):
 - **Level model** (normalized 0–100): `target = base_dose × Π(interaction factors)`. Band
   `[55,70]`, baseline `42`, critical lines `35`/`80`. Tunables in
   `backend/app/game/controller.py` and `frontend/src/lib/events.ts`.
-- **Only 1 of 6 stories is built**: „Die Grapefruit-Falle" (Herr Schmidt / Simvastatin,
-  CYP3A4 FDI). The other five are placeholder cards (Johanniskraut, Gene/CYP2D6, DDI,
-  Niere/Leber, Adhärenz).
-- **Secret admin**: long-press the top-left corner (~1.2 s) or press `A` → manual
-  hold-to-pump IN/OUT, stop, reset-to-baseline, live state (for calibration/testing).
+- **All 6 stories built**, each a distinct mechanic (grapefruit photo-grid · Johanniskraut
+  leak-defense · gene triptych · DDI pairing · organ gauge→dial · adherence build-a-week).
+  Story 1 uses the v1 engine; 2–6 are self-contained "v2" components (`game.phase==='play2'`,
+  one `screens/<Id>Play.svelte` each). See `docs/stories/STATUS.md`.
+- **Secret admin** (full-screen): **triple-tap the SafePolyMed logo** (or press `A`) → jog
+  IN/OUT (hold), speed, timed runs, live telemetry, **Entleeren/überpumpen + Kalibrierter
+  Reset**, and the **guided calibration wizard**. `Esc` closes. (Double-tap the footer credit
+  also opens it.)
 - **Device frame**: in the browser the game renders in an exact **1280×720 box** (the Pi
   screen), scaled to fit; on the real Pi it fills the screen with no bezel.
 - The physical torso is mocked on-screen by a small **MiniBar** in the corner.
@@ -78,25 +84,30 @@ with **no code change** (just an env var):
 
 ```
 backend/                    Python 3.13, FastAPI + uvicorn
-  app/main.py               REST (set_target / reset) + WS (level state); serves built UI
-  app/config.py             Settings from .env (PUMP_BACKEND, tick_hz, GPIO pin…)
+  app/main.py               REST: set_target/reset + /api/admin/* (jog · timed · empty ·
+                            calibrated_reset · calibration GET/POST) + WS (level state); serves UI
+  app/config.py             Settings from .env (PUMP_BACKEND, tick_hz, IBT-2 pins, pump rate…)
   app/game/controller.py    LevelController — the torso twin (level→target, band, zones) ★pure, tested
-  app/game/runner.py        async loop: tick controller, drive pump, broadcast
-  app/hardware/             Pump HAL: pump.py (iface) · mock_pump.py · real_pump.py · factory.py
-  tests/                    pytest (controller + mock pump)
+  app/game/runner.py        async loop: tick controller, drive pump; manual mode + pump sequences
+  app/game/calibration.py   load/persist calibration.json (deadband, rates, reset params)
+  app/hardware/             Pump HAL: pump.py (iface) · mock_pump.py · real_pump.py (IBT-2 hw-PWM) · factory.py
+  calibration.default.json  committed baseline (per-machine override = calibration.json, gitignored)
+  tests/                    pytest (controller · mock pump · runner/sequence · calibration)
 frontend/                   Vite + Svelte 5 (runes) + TS
-  src/App.svelte            device frame + screen router + MiniBar + admin
+  src/App.svelte            device frame + screen router + MiniBar; routes to Admin
   src/lib/game.svelte.ts    THE game store (flow, scoring, target=base×factors)  ★
-  src/lib/controller… N/A   (level lives in backend)
   src/lib/locale.svelte.ts  i18n: t() with German fallback; all UI strings  ★ (edit copy here)
   src/lib/events.ts         event pool (grapefruit, apfel) + dose levels
-  src/lib/stories.ts        the 6 story cards
-  src/lib/api.ts            WS connect + setTarget/reset
+  src/lib/stories.ts        the 6 story cards     ·  src/lib/flow.ts  shared v2 flow logic
+  src/lib/api.ts            WS connect + setTarget/reset + admin/* (pump, calibration)
+  src/lib/calib.ts          pure calibration math + types (tested via sim/calib.sim.ts)
+  src/lib/NumPad.svelte     on-screen numeric keypad (the kiosk has no OS keyboard)
   src/lib/MiniBar.svelte    small on-screen mock of the physical torso (corner bar)
-  src/lib/screens/          Start, StorySelect, Briefing, Play, Outcome, Resetting, Admin
-deploy/                     Pi kiosk: install.sh, update.sh, systemd units, sway-kiosk.config
+  src/lib/screens/          Start, StorySelect, Briefing, Play, {Ddi,Organ,Gene,Woche,Jk}Play,
+                            Outcome, Resetting, Admin, CalibWizard
+deploy/                     Pi kiosk: install.sh (+ pwm overlay/udev), update.sh, systemd units, sway config
 tools/pump_test.py          standalone IBT-2 pump bench (no project deps)
-docs/game-design.md         living design doc (v0.6 = §18); docs/mockups/ visual refs
+docs/game-design.md         living design doc (§19); docs/stories/ specs + STATUS; docs/mockups/
 docs/calibration.md         pump + torso calibration protocol (run from the on-screen admin)
 justfile                    dev task runner
 ```
@@ -156,15 +167,13 @@ just tag v0.3.0  # annotated git tag + push
 
 ## Open work (rough priority)
 
-1. **Pump bring-up** — ✅ bench (`tools/pump_test.py`) + `RealPump` (hardware PWM, 3.3 V VCC,
-   active-high, enable-gated) + on-screen **admin** (triple-tap the logo: jog IN/OUT, timed runs,
-   ml/s calibration) all done. Remaining: (a) **calibrate** per
-   [`docs/calibration.md`](docs/calibration.md) (deadband + ml/s, via the admin); (b) build the
-   **model-follower** in the runner (drive the pump so the real torso tracks the computed target).
-2. **Reset-between-runs on real hardware**: the drain takes real time (big torso, slow
-   pump) — the „Patient wird vorbereitet …" screen already handles this; tune the rate.
-3. **More stories** (2–6): Johanniskraut (induction ↓), Gene/CYP2D6 (DGI), a DDI, organ
-   impairment, adherence. Each is data in `events.ts` + `stories.ts` (+ copy in locale).
-4. **i18n**: real EN / NL / AR dictionaries (AR also needs RTL handling).
-5. **Feel-tuning** (drift speed, band width, dose levels) once the real torso is in.
-6. Optional: an LED strip inside the torso (green/red glow), sound, age-adaptive wording.
+1. **Pump calibration + control** — ✅ bench (`tools/pump_test.py`), `RealPump` (hardware PWM,
+   3.3 V VCC, active-high, enable-gated), on-screen **admin**, **guided calibration wizard**, and
+   the **home-then-dose reset** (empty/overpump → prime a known volume) are done. Remaining:
+   (a) run the wizard on the **real torso** and commit the numbers to `calibration.default.json`;
+   (b) the **model-follower** in the runner (drive the pump so the real torso tracks the computed
+   target, using deadband + per-direction rate); (c) wire **Kalibrierter Reset** into the
+   „Patient wird vorbereitet …" between-runs screen. Protocol: [`docs/calibration.md`](docs/calibration.md).
+2. **i18n**: real EN / FR / NL / AR dictionaries (AR also needs RTL); verify drug/Fachinfo wording.
+3. **Feel-tuning** (drift speed, band width, dose levels) once the real torso is calibrated.
+4. Optional: an LED strip inside the torso (green/red glow), sound, age-adaptive wording.
