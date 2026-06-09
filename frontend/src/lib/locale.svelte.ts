@@ -519,6 +519,10 @@ const de: Record<string, string> = {
   'admin.dir': 'Richtung',
   'admin.running': 'Pumpe',
   'admin.mockNote': 'MOCK-Modus: keine echte Pumpe – nur Simulation.',
+  'admin.measure': 'Durchfluss messen (bei 100 %)',
+  'admin.volume': 'Volumen (ml)',
+  'admin.duration': 'Dauer (s)',
+  'admin.saveCalc': 'Messung als Rate speichern',
 }
 
 // Start-screen translations (test of the t() mechanism). Everything else still

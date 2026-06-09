@@ -97,6 +97,7 @@ frontend/                   Vite + Svelte 5 (runes) + TS
 deploy/                     Pi kiosk: install.sh, update.sh, systemd units, sway-kiosk.config
 tools/pump_test.py          standalone IBT-2 pump bench (no project deps)
 docs/game-design.md         living design doc (v0.6 = §18); docs/mockups/ visual refs
+docs/calibration.md         pump + torso calibration protocol (run from the on-screen admin)
 justfile                    dev task runner
 ```
 
@@ -155,11 +156,11 @@ just tag v0.3.0  # annotated git tag + push
 
 ## Open work (rough priority)
 
-1. **Pump bring-up** — ✅ bench works (`tools/pump_test.py`, hardware PWM, 3.3 V VCC, standard
-   active-high). Remaining: (a) **calibrate** the deadband (min duty before motion) + ml/s in &
-   out; (b) rewrite `app/hardware/real_pump.py` for the **4-pin H-bridge** using
-   **`rpi-hardware-pwm`** (active-high dual-PWM, **enable-gated stop**) + a **model-follower** in
-   the runner (drive the pump so the real level tracks the computed target).
+1. **Pump bring-up** — ✅ bench (`tools/pump_test.py`) + `RealPump` (hardware PWM, 3.3 V VCC,
+   active-high, enable-gated) + on-screen **admin** (triple-tap the logo: jog IN/OUT, timed runs,
+   ml/s calibration) all done. Remaining: (a) **calibrate** per
+   [`docs/calibration.md`](docs/calibration.md) (deadband + ml/s, via the admin); (b) build the
+   **model-follower** in the runner (drive the pump so the real torso tracks the computed target).
 2. **Reset-between-runs on real hardware**: the drain takes real time (big torso, slow
    pump) — the „Patient wird vorbereitet …" screen already handles this; tune the rate.
 3. **More stories** (2–6): Johanniskraut (induction ↓), Gene/CYP2D6 (DGI), a DDI, organ

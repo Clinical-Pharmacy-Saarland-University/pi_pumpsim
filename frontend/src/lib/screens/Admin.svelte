@@ -3,6 +3,7 @@
   import { t } from '../locale.svelte'
   import { game } from '../game.svelte'
   import { api } from '../api'
+  import { mlPerSec, round1 } from '../calib'
 
   let { onclose }: { onclose: () => void } = $props()
 
@@ -12,6 +13,11 @@
   let held = $state<Dir | null>(null)
   let rateInput = $state(2.0)
   let rateSynced = false
+
+  // flow-measurement helper: enter measured volume + duration -> ml/s
+  let volMl = $state(0)
+  let durS = $state(30)
+  let calcRate = $derived(mlPerSec(volMl, durS))
 
   let cap = $derived(game.level?.capacity ?? 100)
   let isReal = $derived(game.level?.backend === 'real')
@@ -47,6 +53,11 @@
   const timed = (dir: Dir, seconds: number) =>
     api.admin.run(dir, speed / 100, seconds).catch(() => {})
   const setRate = () => api.admin.rate(rateInput).catch(() => {})
+  function saveCalc() {
+    if (calcRate <= 0) return
+    rateInput = round1(calcRate)
+    api.admin.rate(calcRate).catch(() => {})
+  }
   const resetBaseline = () => {
     held = null
     api.admin.reset().catch(() => {})
@@ -110,6 +121,21 @@
     <section class="col">
       <div class="block">
         <div class="bhead">{t('admin.calib')}</div>
+
+        <div class="measure">
+          <div class="mlabel">{t('admin.measure')}</div>
+          <div class="mrow">
+            <label>{t('admin.volume')}
+              <input type="number" min="0" step="1" bind:value={volMl} />
+            </label>
+            <label>{t('admin.duration')}
+              <input type="number" min="0.1" step="1" bind:value={durS} />
+            </label>
+          </div>
+          <div class="mresult">= <b>{calcRate.toFixed(1)}</b> ml/s</div>
+          <button class="msave" onclick={saveCalc}>{t('admin.saveCalc')}</button>
+        </div>
+
         <label class="ratelabel" for="rate">{t('admin.rate')}</label>
         <div class="raterow">
           <input id="rate" type="number" min="0.01" step="0.1" bind:value={rateInput} />
@@ -288,6 +314,58 @@
     font-weight: 700;
     color: #e8edff;
   }
+  .measure {
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  .mlabel {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+  .mrow {
+    display: flex;
+    gap: 10px;
+  }
+  .mrow label {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .mrow input {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    color: #e8edff;
+    font-size: 18px;
+    width: 100%;
+  }
+  .mresult {
+    margin: 10px 0;
+    font-size: 18px;
+  }
+  .mresult b {
+    font-size: 24px;
+    color: var(--spm-cyan, #00beca);
+  }
+  .msave {
+    width: 100%;
+    background: var(--spm-cyan, #00beca);
+    color: #04222a;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-weight: 800;
+  }
+
   .ratelabel {
     display: block;
     font-size: 14px;
