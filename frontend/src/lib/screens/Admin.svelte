@@ -4,8 +4,11 @@
   import { game } from '../game.svelte'
   import { api } from '../api'
   import { mlPerSec, round1 } from '../calib'
+  import CalibWizard from './CalibWizard.svelte'
 
   let { onclose }: { onclose: () => void } = $props()
+
+  let wizard = $state(false)
 
   type Dir = 'in' | 'out' | 'stop'
 
@@ -122,6 +125,8 @@
       <div class="block">
         <div class="bhead">{t('admin.calib')}</div>
 
+        <button class="wizbtn" onclick={() => (wizard = true)}>{t('cal.startGuided')}</button>
+
         <div class="measure">
           <div class="mlabel">{t('admin.measure')}</div>
           <div class="mrow">
@@ -163,6 +168,8 @@
   </div>
 
   <footer><kbd>A</kbd>/<kbd>Esc</kbd> schließt · Geheim-Start: Logo 3× tippen</footer>
+
+  {#if wizard}<CalibWizard onclose={() => (wizard = false)} />{/if}
 </aside>
 
 <style>
@@ -313,6 +320,17 @@
     padding: 16px 0;
     font-weight: 700;
     color: #e8edff;
+  }
+  .wizbtn {
+    width: 100%;
+    background: linear-gradient(120deg, var(--spm-cyan, #00beca), var(--green, #1f9d6b));
+    color: #04222a;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    font-weight: 800;
+    font-size: 16px;
+    margin-bottom: 12px;
   }
   .measure {
     background: rgba(0, 0, 0, 0.22);

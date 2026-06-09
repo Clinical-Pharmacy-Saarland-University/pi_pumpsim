@@ -12,6 +12,20 @@ timed auto-stop runs (15/30/60 s), a **flow-measurement helper**, and live telem
 
 ---
 
+## Quick path — the guided wizard (recommended)
+Admin → **„Geführte Kalibrierung starten"**. It drives the pump through the whole routine and
+saves the result to `backend/calibration.json` (loaded on boot; `rate_in` is applied live):
+1. **Totband (IN, then OUT):** tap **Rampe starten** — the duty ramps up automatically; tap
+   **„Es fließt jetzt!"** the instant liquid moves → captures `deadband_in` / `deadband_out`.
+2. **Durchfluss (IN & OUT at several duties):** for each step, put the container on the scale, tap
+   **Messlauf starten (30 s)**, then type the **weighed grams** (1 g ≈ 1 ml) → it stores ml/s.
+3. **Überprüfen & Speichern:** check the deadbands + rates + samples, then **Speichern**.
+
+The manual steps below are the underlying procedure — use them to do it by hand, to understand what
+the wizard does, or to cross-check a number.
+
+---
+
 ## What we measure (the outputs)
 | symbol | meaning | where it goes |
 |---|---|---|

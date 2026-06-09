@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import settings
+from .game.calibration import load_calibration, save_calibration
 from .game.runner import LevelRunner
 from .hardware.factory import create_pump
 
@@ -27,6 +28,9 @@ async def lifespan(app: FastAPI):
     pump = create_pump(settings)
     runner = LevelRunner(pump, settings.tick_hz, backend=settings.pump_backend)
     await runner.start()
+    calib = load_calibration()
+    if calib.get("rate_in"):
+        runner.set_rate(calib["rate_in"])  # apply stored calibration
     print(f"[pumpsim] torso-twin up  |  PUMP_BACKEND={settings.pump_backend}")
     try:
         yield
@@ -65,6 +69,20 @@ class ManualRequest(BaseModel):
 
 class RateRequest(BaseModel):
     rate_ml_s: float = Field(gt=0)
+
+
+class CalibSample(BaseModel):
+    dir: str = Field(pattern="^(in|out)$")
+    duty: float = Field(ge=0, le=1)
+    ml_per_s: float = Field(ge=0)
+
+
+class CalibrationModel(BaseModel):
+    deadband_in: float | None = Field(default=None, ge=0, le=1)
+    deadband_out: float | None = Field(default=None, ge=0, le=1)
+    rate_in: float | None = Field(default=None, ge=0)
+    rate_out: float | None = Field(default=None, ge=0)
+    samples: list[CalibSample] = Field(default_factory=list)
 
 
 @app.get("/api/state")
@@ -118,6 +136,20 @@ def admin_rate(req: RateRequest) -> dict:
 @app.post("/api/admin/reset")
 def admin_reset() -> dict:
     _runner().reset()
+    return {"ok": True}
+
+
+@app.get("/api/admin/calibration")
+def get_calibration() -> dict:
+    return load_calibration()
+
+
+@app.post("/api/admin/calibration")
+def post_calibration(c: CalibrationModel) -> dict:
+    data = c.model_dump()
+    save_calibration(data)
+    if c.rate_in:
+        _runner().set_rate(c.rate_in)  # apply the fill rate live
     return {"ok": True}
 
 

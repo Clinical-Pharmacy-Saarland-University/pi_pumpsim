@@ -1,5 +1,47 @@
-// Pure calibration math for the admin panel (no Svelte runes -> unit-testable).
+// Pure calibration math + types for the admin panel (no Svelte runes -> testable).
 // Run the checks with:  npx tsx sim/calib.sim.ts
+
+export type Dir = 'in' | 'out'
+
+export interface CalibSample {
+  dir: Dir
+  duty: number // 0..1
+  ml_per_s: number
+}
+
+export interface Calibration {
+  deadband_in: number | null
+  deadband_out: number | null
+  rate_in: number | null
+  rate_out: number | null
+  samples: CalibSample[]
+}
+
+/** Flow-measurement targets the wizard walks through (duty as a 0..1 fraction). */
+export const FLOW_TARGETS: { dir: Dir; duty: number }[] = [
+  { dir: 'in', duty: 1.0 },
+  { dir: 'out', duty: 1.0 },
+  { dir: 'in', duty: 0.6 },
+  { dir: 'out', duty: 0.6 },
+]
+
+/** Assemble a Calibration; rate_in/out are taken from the 100%-duty samples. */
+export function buildCalibration(
+  deadbandIn: number | null,
+  deadbandOut: number | null,
+  samples: CalibSample[],
+): Calibration {
+  const at100 = (d: Dir) =>
+    samples.find((s) => s.dir === d && s.duty >= 0.999)?.ml_per_s ?? null
+  return {
+    deadband_in: deadbandIn,
+    deadband_out: deadbandOut,
+    rate_in: at100('in'),
+    rate_out: at100('out'),
+    samples,
+  }
+}
+
 
 /** Flow rate in ml/s from a measured volume over a duration. Safe on bad input. */
 export function mlPerSec(volumeMl: number, seconds: number): number {

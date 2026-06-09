@@ -1,5 +1,5 @@
 // Headless checks for the calibration math. Run: npx tsx sim/calib.sim.ts
-import { mlPerSec, meanMlPerSec, round1 } from '../src/lib/calib'
+import { mlPerSec, meanMlPerSec, round1, buildCalibration, FLOW_TARGETS } from '../src/lib/calib'
 
 let fails = 0
 const ok = (name: string, cond: boolean) => {
@@ -26,6 +26,19 @@ ok(
   ) === 20,
 )
 ok('mean ignores bad samples', meanMlPerSec([{ volumeMl: 300, seconds: 0 }]) === 0)
+
+// --- buildCalibration -------------------------------------------------------
+const cal = buildCalibration(0.2, 0.25, [
+  { dir: 'in', duty: 1.0, ml_per_s: 8.5 },
+  { dir: 'out', duty: 1.0, ml_per_s: 6.0 },
+  { dir: 'in', duty: 0.6, ml_per_s: 4.8 },
+])
+ok('rate_in taken from in@100%', cal.rate_in === 8.5)
+ok('rate_out taken from out@100%', cal.rate_out === 6.0)
+ok('deadbands preserved', cal.deadband_in === 0.2 && cal.deadband_out === 0.25)
+ok('samples preserved', cal.samples.length === 3)
+ok('rate null when no 100% sample', buildCalibration(null, null, [{ dir: 'in', duty: 0.6, ml_per_s: 4 }]).rate_in === null)
+ok('FLOW_TARGETS covers both directions at 100%', FLOW_TARGETS.some((t) => t.dir === 'in' && t.duty === 1) && FLOW_TARGETS.some((t) => t.dir === 'out' && t.duty === 1))
 
 console.log(`\n${fails === 0 ? '✅ ALL PASS' : '❌ ' + fails + ' FAILED'}`)
 process.exit(fails === 0 ? 0 : 1)

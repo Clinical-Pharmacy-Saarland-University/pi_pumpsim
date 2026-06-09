@@ -523,6 +523,32 @@ const de: Record<string, string> = {
   'admin.volume': 'Volumen (ml)',
   'admin.duration': 'Dauer (s)',
   'admin.saveCalc': 'Messung als Rate speichern',
+
+  // guided calibration wizard
+  'cal.startGuided': 'Geführte Kalibrierung starten',
+  'cal.title': 'Geführte Kalibrierung',
+  'cal.step': 'Schritt',
+  'cal.intro':
+    'Wir messen das Totband (Mindest-Tastgrad) und den Durchfluss. Bereithalten: Waage + Behälter (1 g ≈ 1 ml).',
+  'cal.start': 'Starten',
+  'cal.deadband': 'Totband',
+  'cal.deadbandHelp': 'Rampe starten – tippe „Es fließt jetzt!", sobald Flüssigkeit läuft.',
+  'cal.ramp': 'Rampe starten',
+  'cal.flowsNow': 'Es fließt jetzt!',
+  'cal.skip': 'Überspringen',
+  'cal.flowTitle': 'Durchfluss messen',
+  'cal.flowHelp':
+    'Behälter auf die Waage, Messlauf starten, dann die gewogene Menge eintragen (1 g ≈ 1 ml).',
+  'cal.running': 'Messlauf läuft …',
+  'cal.startRun': 'Messlauf starten (30 s)',
+  'cal.grams': 'Gewogene Menge (g ≈ ml)',
+  'cal.apply': 'Übernehmen',
+  'cal.review': 'Überprüfen & Speichern',
+  'cal.rate': 'Rate @100 %',
+  'cal.save': 'Kalibrierung speichern',
+  'cal.discard': 'Verwerfen',
+  'cal.savedMsg': 'Kalibrierung gespeichert ✓',
+  'cal.close': 'Schließen',
 }
 
 // Start-screen translations (test of the t() mechanism). Everything else still

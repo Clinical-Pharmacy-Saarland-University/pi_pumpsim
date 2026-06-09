@@ -17,6 +17,8 @@ desktop.ini
 !.env.example
 config.local.*
 *.local.json
+# pump calibration is per-machine (written by the admin wizard)
+backend/calibration.json
 
 # ─── Python (backend / sim / hardware layer) ──────────
 __pycache__/

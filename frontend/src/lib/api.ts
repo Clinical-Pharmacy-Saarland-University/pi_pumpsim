@@ -54,5 +54,11 @@ export const api = {
     stop: () => post('/api/admin/stop'),
     rate: (rate_ml_s: number) => post('/api/admin/rate', { rate_ml_s }),
     reset: () => post('/api/admin/reset'),
+    getCalibration: async () => {
+      const r = await fetch('/api/admin/calibration')
+      if (!r.ok) throw new Error(`calibration -> ${r.status}`)
+      return r.json()
+    },
+    saveCalibration: (c: unknown) => post('/api/admin/calibration', c),
   },
 }
