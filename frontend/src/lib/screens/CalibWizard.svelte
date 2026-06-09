@@ -10,8 +10,11 @@
     type CalibSample,
     type Dir,
   } from '../calib'
+  import NumPad from '../NumPad.svelte'
 
   let { onclose }: { onclose: () => void } = $props()
+
+  let editGrams = $state(false)
 
   type Phase = 'intro' | 'deadbandIn' | 'deadbandOut' | 'flow' | 'review' | 'done'
   let phase = $state<Phase>('intro')
@@ -173,9 +176,8 @@
           <button class:sel={runSecs === 10} onclick={() => (runSecs = 10)}>10 s</button>
         </div>
         <button class="primary" onclick={startRun}>{t('cal.startRun')} ({runSecs} s)</button>
-        <label class="glabel">{t('cal.grams')}
-          <input type="number" min="0" step="1" bind:value={grams} />
-        </label>
+        <div class="glabel">{t('cal.grams')}</div>
+        <button class="numfield" onclick={() => (editGrams = true)}>{grams} g</button>
         <div class="muted">= <b>{liveRate.toFixed(1)}</b> ml/s</div>
         <button class="flows" onclick={applyFlow} disabled={liveRate <= 0}>{t('cal.apply')}</button>
       {/if}
@@ -207,6 +209,18 @@
       <button class="primary" onclick={close}>{t('cal.close')}</button>
     </div>
   {/if}
+
+  {#if editGrams}
+    <NumPad
+      label={t('cal.grams')}
+      unit="g"
+      onsubmit={(v) => {
+        grams = v
+        editGrams = false
+      }}
+      oncancel={() => (editGrams = false)}
+    />
+  {/if}
 </aside>
 
 <style>
@@ -214,12 +228,16 @@
     position: absolute;
     inset: 0;
     background: rgba(8, 11, 22, 0.99);
-    padding: 18px 24px;
+    padding: 14px 24px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     z-index: 60;
     overflow-y: auto;
+    scrollbar-width: none; /* hide scrollbar on the kiosk */
+  }
+  .wiz::-webkit-scrollbar {
+    display: none;
   }
   header {
     display: flex;
@@ -271,7 +289,7 @@
     font-weight: 800;
   }
   .gauge {
-    font-size: 72px;
+    font-size: 56px;
     font-weight: 900;
     text-align: center;
     color: var(--spm-cyan, #00beca);
@@ -288,9 +306,10 @@
   button {
     border: none;
     border-radius: 14px;
-    padding: 18px;
+    padding: 16px;
     font-size: 19px;
     font-weight: 800;
+    touch-action: manipulation;
   }
   .primary {
     background: var(--spm-cyan, #00beca);
@@ -351,19 +370,16 @@
     border-color: var(--spm-cyan, #00beca);
   }
   .glabel {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
     font-size: 14px;
     color: var(--dim);
+    text-align: center;
   }
-  .glabel input {
+  .numfield {
     background: rgba(0, 0, 0, 0.35);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px;
     color: #e8edff;
-    font-size: 22px;
+    font-size: 26px;
+    font-weight: 800;
   }
   .results {
     background: var(--surface);

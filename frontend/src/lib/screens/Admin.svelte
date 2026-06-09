@@ -5,10 +5,14 @@
   import { api } from '../api'
   import { mlPerSec, round1 } from '../calib'
   import CalibWizard from './CalibWizard.svelte'
+  import NumPad from '../NumPad.svelte'
 
   let { onclose }: { onclose: () => void } = $props()
 
   let wizard = $state(false)
+  let pad = $state<null | { label: string; unit: string; set: (v: number) => void }>(null)
+  const openPad = (label: string, unit: string, set: (v: number) => void) =>
+    (pad = { label, unit, set })
 
   type Dir = 'in' | 'out' | 'stop'
 
@@ -130,20 +134,21 @@
         <div class="measure">
           <div class="mlabel">{t('admin.measure')}</div>
           <div class="mrow">
-            <label>{t('admin.volume')}
-              <input type="number" min="0" step="1" bind:value={volMl} />
-            </label>
-            <label>{t('admin.duration')}
-              <input type="number" min="0.1" step="1" bind:value={durS} />
-            </label>
+            <button class="numbtn" onclick={() => openPad(t('admin.volume'), 'ml', (v) => (volMl = v))}>
+              <span>{t('admin.volume')}</span><b>{volMl}</b>
+            </button>
+            <button class="numbtn" onclick={() => openPad(t('admin.duration'), 's', (v) => (durS = v))}>
+              <span>{t('admin.duration')}</span><b>{durS}</b>
+            </button>
           </div>
           <div class="mresult">= <b>{calcRate.toFixed(1)}</b> ml/s</div>
           <button class="msave" onclick={saveCalc}>{t('admin.saveCalc')}</button>
         </div>
 
-        <label class="ratelabel" for="rate">{t('admin.rate')}</label>
         <div class="raterow">
-          <input id="rate" type="number" min="0.01" step="0.1" bind:value={rateInput} />
+          <button class="numbtn" onclick={() => openPad(t('admin.rate'), 'ml/s', (v) => (rateInput = v))}>
+            <span>{t('admin.rate')}</span><b>{rateInput}</b>
+          </button>
           <button onclick={setRate}>{t('admin.setRate')}</button>
         </div>
         <p class="deadband">{t('admin.deadbandHint')}</p>
@@ -169,6 +174,18 @@
 
   <footer><kbd>A</kbd>/<kbd>Esc</kbd> schließt · Geheim-Start: Logo 3× tippen</footer>
 
+  {#if pad}
+    <NumPad
+      label={pad.label}
+      unit={pad.unit}
+      onsubmit={(v) => {
+        pad?.set(v)
+        pad = null
+      }}
+      oncancel={() => (pad = null)}
+    />
+  {/if}
+
   {#if wizard}<CalibWizard onclose={() => (wizard = false)} />{/if}
 </aside>
 
@@ -185,6 +202,13 @@
     gap: 14px;
     z-index: 50;
     overflow-y: auto;
+    scrollbar-width: none; /* hide scrollbar on the kiosk */
+  }
+  .admin::-webkit-scrollbar {
+    display: none;
+  }
+  .admin button {
+    touch-action: manipulation; /* no tap delay (.pump buttons override below) */
   }
   header {
     display: flex;
@@ -349,22 +373,24 @@
     display: flex;
     gap: 10px;
   }
-  .mrow label {
+  .numbtn {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 12px;
-    color: var(--dim);
-  }
-  .mrow input {
+    align-items: flex-start;
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 10px;
+    padding: 10px 12px;
     color: #e8edff;
-    font-size: 18px;
-    width: 100%;
+  }
+  .numbtn span {
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .numbtn b {
+    font-size: 20px;
   }
   .mresult {
     margin: 10px 0;
@@ -384,24 +410,10 @@
     font-weight: 800;
   }
 
-  .ratelabel {
-    display: block;
-    font-size: 14px;
-    color: var(--dim);
-    margin-bottom: 6px;
-  }
   .raterow {
     display: flex;
     gap: 10px;
-  }
-  .raterow input {
-    flex: 1;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px;
-    color: #e8edff;
-    font-size: 18px;
+    align-items: stretch;
   }
   .raterow button {
     background: var(--spm-cyan, #00beca);
