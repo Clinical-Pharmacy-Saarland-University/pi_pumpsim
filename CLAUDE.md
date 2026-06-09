@@ -23,8 +23,10 @@ fall back to German).
 - **Game (v0.6) is built and playable** in the browser (mock, no Pi needed). Verified
   end-to-end via Playwright.
 - **Deployed and running on the real Pi** (kiosk, landscape, touch) in **mock** mode.
-- **Pump not wired yet**: the first IBT-2 driver was dead (prior short); a replacement
-  (BTS7960 2-pack) is on the way. `RealPump` is still a placeholder — see *Open work*.
+- **Pump now runs on the bench** (`tools/pump_test.py`, hardware PWM): clean proportional
+  IN/OUT speed. It was a hardware saga — the original driver was dead, the 1st of the replacement
+  2-pack was also bad, and VCC had to be **3.3 V not 5 V**; the 2nd unit on 3.3 V works.
+  `RealPump` is still a placeholder — next is calibration; see *Open work*.
 - Repo: **public** at `github.com/Clinical-Pharmacy-Saarland-University/pi_pumpsim`.
 
 ## The big architecture idea
@@ -125,7 +127,14 @@ just tag v0.3.0  # annotated git tag + push
   kernel — `cage` couldn't rotate, so the kiosk uses **sway**.
 - **Pump driver = IBT-2 (BTS7960) H-bridge.** Pins (BCM/physical, with cable colours):
   RPWM=GPIO12/p32 🟢 · LPWM=GPIO13/p33 ⚪ · R_EN=GPIO23/p16 🔵 · L_EN=GPIO24/p18 🟡 ·
-  VCC=5V/p2 🔴 · GND=p14 ⚫. Motor on its own external supply (B+/B−, M+/M−).
+  VCC=**3.3V**/p1 🔴 · GND=p14 ⚫. Motor on its own external supply (B+/B−, M+/M−).
+  ⚠️ **VCC must be 3.3 V, not 5 V** — at 5 V the BTS7960 input threshold sits above the Pi's
+  3.3 V GPIO HIGH, so speed control goes haywire (cost us a long debug — see the memory note).
+- **Pump speed = hardware PWM** (GPIO12/13 are PWM-capable; software/lgpio PWM is too jittery on
+  the Pi 5). Enable with `dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4` in
+  `/boot/firmware/config.txt` + `sudo pip3 install rpi-hardware-pwm --break-system-packages`
+  (chip auto-detects → `pwmchip0` on trixie/6.12). Drive = standard **active-high**: one PWM at
+  the duty, the other at 0; enables HIGH to run, **enable LOW = stop**. (`pigpio` won't work on Pi 5.)
 - **Deploy** (GitHub → Pi): `git clone … && deploy/install.sh && sudo reboot`; update with
   `deploy/update.sh` (pull → rebuild → restart). Two systemd services: `pumpsim-backend`
   (uvicorn) and `pumpsim-kiosk` (sway → Chromium `--kiosk`).
@@ -146,10 +155,11 @@ just tag v0.3.0  # annotated git tag + push
 
 ## Open work (rough priority)
 
-1. **Pump bring-up** (blocked on the replacement IBT-2): bench-test with
-   `tools/pump_test.py`; then rewrite `app/hardware/real_pump.py` for the **4-pin H-bridge**
-   (RPWM/LPWM + enables) and a **model-follower** in the runner (drive the pump so the real
-   level tracks the computed target); then **calibrate** (ml/s in & out) via the admin.
+1. **Pump bring-up** — ✅ bench works (`tools/pump_test.py`, hardware PWM, 3.3 V VCC, standard
+   active-high). Remaining: (a) **calibrate** the deadband (min duty before motion) + ml/s in &
+   out; (b) rewrite `app/hardware/real_pump.py` for the **4-pin H-bridge** using
+   **`rpi-hardware-pwm`** (active-high dual-PWM, **enable-gated stop**) + a **model-follower** in
+   the runner (drive the pump so the real level tracks the computed target).
 2. **Reset-between-runs on real hardware**: the drain takes real time (big torso, slow
    pump) — the „Patient wird vorbereitet …" screen already handles this; tune the rate.
 3. **More stories** (2–6): Johanniskraut (induction ↓), Gene/CYP2D6 (DGI), a DDI, organ

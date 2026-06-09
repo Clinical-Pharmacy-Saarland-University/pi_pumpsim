@@ -4,27 +4,42 @@
 Check pump direction + speed independently of the game, from a touch/web UI.
 
 The IBT-2 uses TWO pwm inputs (one per direction) + two enables:
-    RPWM = GPIO12 (pin 32, PWM0)   one direction's speed
-    LPWM = GPIO13 (pin 33, PWM1)   other direction's speed
-    R_EN = GPIO23 (pin 16)         enable (held high)
-    L_EN = GPIO24 (pin 18)         enable (held high)
-    VCC  = 5V  (pin 2)             driver logic supply
-    GND  = GND (pin 14)            common ground with the Pi
+    RPWM = GPIO12 (pin 32, hardware PWM / RP1 channel 0)   one direction's speed
+    LPWM = GPIO13 (pin 33, hardware PWM / RP1 channel 1)   other direction's speed
+    R_EN = GPIO23 (pin 16)                                 enable
+    L_EN = GPIO24 (pin 18)                                 enable
+    VCC  = 5V (pin 2) ; GND = GND (pin 14)  common ground with the Pi
 B+/B- = external motor supply ; M+/M- = pump motor. (R_IS/L_IS: leave unconnected.)
 
 Direction: drive ONE pwm at the wanted duty, the other at 0. Never both > 0.
-'in' uses RPWM by default; if in/out come out swapped, set PUMP_IN_IS_RPWM=0
-(or swap the two motor leads M+/M-).
+'in' uses RPWM by default; set PUMP_IN_IS_RPWM=0 to swap (or swap the motor leads).
 
-Run on the Pi (no sudo; user is in the 'gpio' group):
-    python3 ~/pi_pumpsim/tools/pump_test.py
-Then open  http://pumpsim.local:8001  from your PC. Ctrl+C stops + releases GPIO.
-Override via env: PUMP_RPWM_PIN PUMP_LPWM_PIN PUMP_REN_PIN PUMP_LEN_PIN
-                  PUMP_IN_IS_RPWM PUMP_PWM_HZ PUMP_TEST_PORT PUMP_PWM_ACTIVE_HIGH
-(PUMP_PWM_ACTIVE_HIGH=0 if the board drives the motor when the PWM pin is LOW.)
+PWM MODE  <-- the important part:
+  GPIO12/13 are the Pi's *hardware* PWM pins. Software PWM (lgpio) on the Pi 5 does NOT
+  reproduce the duty cycle faithfully -> jittery, asymmetric, non-monotonic speed (one
+  direction "fast at 1% and 95%", the other inverted, etc). Use HARDWARE PWM:
+    1) add to /boot/firmware/config.txt:
+         dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4
+    2) sudo reboot
+    3) sudo pip3 install rpi-hardware-pwm --break-system-packages
+  Then this bench auto-detects hardware PWM (and the right sysfs pwmchip, which moved
+  between kernels: 6.6 -> pwmchip2, 6.12/trixie -> pwmchip0). PUMP_PWM_MODE=sw forces
+  the old (poor) software path; PUMP_PWM_MODE=hw forces hardware and errors if missing.
+
+Run on the Pi:
+    python3 ~/pi_pumpsim/tools/pump_test.py     # add sudo if /sys/class/pwm is root-only
+Open  http://<pi-ip>:8001  from your PC. Ctrl+C stops the pump and releases GPIO.
+
+Env overrides:
+  PUMP_RPWM_PIN PUMP_LPWM_PIN PUMP_REN_PIN PUMP_LEN_PIN   (BCM pin numbers)
+  PUMP_RPWM_CHAN PUMP_LPWM_CHAN   (hw-PWM channels; Pi5: GPIO12=0 13=1 18=2 19=3)
+  PUMP_PWM_CHIP   ('auto' detects; trixie/6.12 = 0, older 6.6 = 2)
+  PUMP_PWM_MODE   (auto|hw|sw)   PUMP_PWM_HZ   (hw default 20000, sw default 100)
+  PUMP_IN_IS_RPWM PUMP_TEST_PORT   PUMP_PWM_ACTIVE_HIGH   (software-mode polarity only)
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 import threading
@@ -37,28 +52,109 @@ LPWM_PIN = int(os.environ.get("PUMP_LPWM_PIN", "13"))
 REN_PIN = int(os.environ.get("PUMP_REN_PIN", "23"))
 LEN_PIN = int(os.environ.get("PUMP_LEN_PIN", "24"))
 IN_IS_RPWM = os.environ.get("PUMP_IN_IS_RPWM", "1") == "1"  # which pwm pin means "in"
-PWM_HZ = int(os.environ.get("PUMP_PWM_HZ", "1000"))
 PORT = int(os.environ.get("PUMP_TEST_PORT", "8001"))
 MAX_SECONDS = 120  # safety cap on timed runs
+
+# --- hardware-PWM config -----------------------------------------------------
+_PIN_TO_CHAN = {12: 0, 13: 1, 18: 2, 19: 3}  # Raspberry Pi 5 (RP1) GPIO -> PWM channel
+RPWM_CHAN = int(os.environ.get("PUMP_RPWM_CHAN", str(_PIN_TO_CHAN.get(RPWM_PIN, 0))))
+LPWM_CHAN = int(os.environ.get("PUMP_LPWM_CHAN", str(_PIN_TO_CHAN.get(LPWM_PIN, 1))))
+PWM_CHIP = os.environ.get("PUMP_PWM_CHIP", "auto")
+PWM_MODE = os.environ.get("PUMP_PWM_MODE", "auto").lower()  # auto | hw | sw
+ACTIVE_HIGH = os.environ.get("PUMP_PWM_ACTIVE_HIGH", "1") == "1"  # software mode only
+_HZ_ENV = os.environ.get("PUMP_PWM_HZ")  # None -> per-mode default
 
 try:
     from gpiozero import DigitalOutputDevice, PWMOutputDevice
 except Exception as e:  # pragma: no cover - Pi-only
     raise SystemExit(f"gpiozero not available ({e}). Run this on the Pi.")
 
-# Some driver boards (and the Pi 5 PWM lines in this build) are ACTIVE-LOW on the PWM
-# inputs: pin LOW = motor driven. Tell-tale of the wrong polarity: the motor runs at
-# startup / on STOP and "100%" stops it. Set PUMP_PWM_ACTIVE_HIGH=0 for such a board.
-ACTIVE_HIGH = os.environ.get("PUMP_PWM_ACTIVE_HIGH", "1") == "1"
 
-_rpwm = PWMOutputDevice(RPWM_PIN, frequency=PWM_HZ, active_high=ACTIVE_HIGH, initial_value=0)
-_lpwm = PWMOutputDevice(LPWM_PIN, frequency=PWM_HZ, active_high=ACTIVE_HIGH, initial_value=0)
-# Enables start OFF and come on ONLY while actively pumping — so the motor can't run
+def _detect_chip() -> int:
+    """Find the RP1 PWM sysfs chip (the one exposing the GPIO PWM channels).
+
+    The pwmchip *number* moved between kernels (6.6 -> pwmchip2, 6.12 -> pwmchip0),
+    so pick by capability: the chip exposing the most channels (RP1 GPIO PWM = 4).
+    """
+    best = None  # (chip_number, npwm)
+    for path in sorted(glob.glob("/sys/class/pwm/pwmchip*")):
+        try:
+            with open(os.path.join(path, "npwm")) as f:
+                n = int(f.read().strip())
+        except OSError:
+            continue
+        num = int(path.rsplit("pwmchip", 1)[1])
+        if n >= 2 and (best is None or n > best[1]):
+            best = (num, n)
+    return best[0] if best else 0
+
+
+class _SwPwm:
+    """Software PWM via gpiozero/lgpio (jittery on the Pi 5 -- fallback only)."""
+
+    def __init__(self, pin: int, hz: int, active_high: bool):
+        self.dev = PWMOutputDevice(pin, frequency=hz, active_high=active_high, initial_value=0)
+
+    def duty(self, pct: float) -> None:
+        self.dev.value = max(0.0, min(1.0, pct / 100.0))
+
+    def close(self) -> None:
+        self.dev.close()
+
+
+class _HwPwm:
+    """True hardware PWM via rpi-hardware-pwm (clean, fast, symmetric)."""
+
+    def __init__(self, channel: int, hz: int, chip: int):
+        from rpi_hardware_pwm import HardwarePWM
+
+        self.pwm = HardwarePWM(pwm_channel=channel, hz=hz, chip=chip)
+        self.pwm.start(0)  # 0% duty -> off
+
+    def duty(self, pct: float) -> None:
+        self.pwm.change_duty_cycle(max(0.0, min(100.0, pct)))
+
+    def close(self) -> None:
+        try:
+            self.pwm.stop()
+        except Exception:
+            pass
+
+
+def _build_pwm():
+    """Return (mode, rpwm, lpwm, hz, chip). Try hardware PWM, fall back to software."""
+    if PWM_MODE in ("auto", "hw"):
+        try:
+            chip = _detect_chip() if PWM_CHIP == "auto" else int(PWM_CHIP)
+            hz = int(_HZ_ENV) if _HZ_ENV else 20000  # inaudible, clean on hardware
+            r = _HwPwm(RPWM_CHAN, hz, chip)
+            l = _HwPwm(LPWM_CHAN, hz, chip)
+            return "hw", r, l, hz, chip
+        except Exception as e:
+            if PWM_MODE == "hw":
+                raise SystemExit(
+                    f"hardware PWM requested but unavailable: {e}\n"
+                    "Add 'dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4' to "
+                    "/boot/firmware/config.txt, reboot, and 'sudo pip3 install "
+                    "rpi-hardware-pwm --break-system-packages'. (sysfs PWM may also need "
+                    "sudo or a udev rule.)"
+                )
+            print(f"[warn] hardware PWM unavailable ({e}); falling back to SOFTWARE PWM -- "
+                  "speed control will be poor. See the file header for the hardware-PWM setup.")
+    hz = int(_HZ_ENV) if _HZ_ENV else 100  # low freq is the best software PWM can do
+    r = _SwPwm(RPWM_PIN, hz, ACTIVE_HIGH)
+    l = _SwPwm(LPWM_PIN, hz, ACTIVE_HIGH)
+    return "sw", r, l, hz, None
+
+
+MODE, _rpwm, _lpwm, PWM_HZ, PWM_CHIP_USED = _build_pwm()
+
+# Enables start OFF and come on ONLY while actively pumping -> the motor can't run
 # before you press anything, and STOP truly cuts the bridge (not just the PWM duty).
 _ren = DigitalOutputDevice(REN_PIN, initial_value=False)
 _len = DigitalOutputDevice(LEN_PIN, initial_value=False)
 
-# map logical direction -> (forward_pwm, reverse_pwm) devices
+# map logical direction -> drive device
 _in_pwm = _rpwm if IN_IS_RPWM else _lpwm
 _out_pwm = _lpwm if IN_IS_RPWM else _rpwm
 
@@ -76,18 +172,18 @@ def apply(direction: str, speed: int) -> None:
             _timer.cancel()
             _timer = None
         if direction == "stop" or speed == 0:
-            _rpwm.value = 0.0
-            _lpwm.value = 0.0
-            _ren.off()  # disable the bridge — a guaranteed stop, polarity-independent
+            _rpwm.duty(0)
+            _lpwm.duty(0)
+            _ren.off()  # disable the bridge -- a guaranteed, polarity-independent stop
             _len.off()
             _state.update(direction="stop", speed=0)
             return
         if direction == "in":
-            _out_pwm.value = 0.0  # zero the opposite first — never both high
-            _in_pwm.value = speed / 100.0
+            _out_pwm.duty(0)  # zero the opposite first -- never both driven
+            _in_pwm.duty(speed)
         elif direction == "out":
-            _in_pwm.value = 0.0
-            _out_pwm.value = speed / 100.0
+            _in_pwm.duty(0)
+            _out_pwm.duty(speed)
         else:
             return
         _ren.on()  # enable the bridge only while actively driving
@@ -127,10 +223,10 @@ input[type=range]{width:100%;height:42px}
   <input id=sp type=range min=0 max=100 value=30 oninput="onSpeed()">
 </div>
 <div class=row>
-  <button class=in onclick="setDir('in')">▲ IN<br><small>fill</small></button>
-  <button class=out onclick="setDir('out')">▼ OUT<br><small>drain</small></button>
+  <button class=in onclick="setDir('in')">&#9650; IN<br><small>fill</small></button>
+  <button class=out onclick="setDir('out')">&#9660; OUT<br><small>drain</small></button>
 </div>
-<div class=row><button class=stop onclick="setDir('stop')">■ STOP</button></div>
+<div class=row><button class=stop onclick="setDir('stop')">&#9632; STOP</button></div>
 <div class="row timed">
   <button onclick="run('in',10)">IN 10s</button>
   <button onclick="run('in',30)">IN 30s</button>
@@ -150,6 +246,12 @@ async function run(d,sec){show(await post('/api/run',{dir:d,speed:spd(),seconds:
 </script></body></html>"""
 
 
+def _mode_str() -> str:
+    if MODE == "hw":
+        return f"HW PWM chip{PWM_CHIP_USED} ch{RPWM_CHAN}/{LPWM_CHAN}"
+    return f"sw PWM active-{'high' if ACTIVE_HIGH else 'low'}"
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):  # quiet
         pass
@@ -166,7 +268,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path in ("/", "/index.html"):
             pins = (f"RPWM=GPIO{RPWM_PIN} (pin 32) &middot; LPWM=GPIO{LPWM_PIN} (pin 33) "
                     f"&middot; R_EN=GPIO{REN_PIN} &middot; L_EN=GPIO{LEN_PIN} &middot; "
-                    f"PWM {PWM_HZ}Hz &middot; 'in'={'RPWM' if IN_IS_RPWM else 'LPWM'}")
+                    f"{_mode_str()} &middot; {PWM_HZ}Hz &middot; "
+                    f"'in'={'RPWM' if IN_IS_RPWM else 'LPWM'}")
             body = PAGE.replace("__PINS__", pins).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -197,9 +300,14 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"Pump test bench (IBT-2) on http://0.0.0.0:{PORT}")
-    print(f"  RPWM=GPIO{RPWM_PIN}(pin32) LPWM=GPIO{LPWM_PIN}(pin33) "
-          f"R_EN=GPIO{REN_PIN}(pin16) L_EN=GPIO{LEN_PIN}(pin18)")
-    print(f"  PWM={PWM_HZ}Hz  'in'={'RPWM' if IN_IS_RPWM else 'LPWM'}")
+    if MODE == "hw":
+        print(f"  HARDWARE PWM  chip={PWM_CHIP_USED}  RPWM=ch{RPWM_CHAN}(GPIO{RPWM_PIN}) "
+              f"LPWM=ch{LPWM_CHAN}(GPIO{LPWM_PIN})  {PWM_HZ}Hz")
+    else:
+        print(f"  software PWM  RPWM=GPIO{RPWM_PIN} LPWM=GPIO{LPWM_PIN}  {PWM_HZ}Hz  "
+              f"active_{'high' if ACTIVE_HIGH else 'low'}  (poor on Pi 5 -- see header)")
+    print(f"  R_EN=GPIO{REN_PIN}(p16) L_EN=GPIO{LEN_PIN}(p18)  "
+          f"'in'={'RPWM' if IN_IS_RPWM else 'LPWM'}")
     print("Open it in a browser. Ctrl+C stops the pump and releases GPIO.")
     try:
         srv.serve_forever()
