@@ -13,16 +13,23 @@ timed auto-stop runs (15/30/60 s), a **flow-measurement helper**, and live telem
 ---
 
 ## Quick path — the guided wizard (recommended)
-Admin → **„Geführte Kalibrierung starten"**. It drives the pump through the whole routine and
-saves the result to `backend/calibration.json` (loaded on boot; `rate_in` is applied live):
-1. **Totband (IN, then OUT):** tap **Rampe starten** — the duty ramps up automatically; tap
-   **„Es fließt jetzt!"** the instant liquid moves → captures `deadband_in` / `deadband_out`.
-2. **Durchfluss (IN & OUT at several duties):** for each step, put the container on the scale, tap
-   **Messlauf starten (30 s)**, then type the **weighed grams** (1 g ≈ 1 ml) → it stores ml/s.
-3. **Überprüfen & Speichern:** check the deadbands + rates + samples, then **Speichern**.
+Admin → **„Geführte Kalibrierung starten"**. It drives the pump and only asks you to read the
+scale; results save to `backend/calibration.json` (loaded on boot; `rate_in` applied live):
+1. **Totband (IN, then OUT):** adjust the duty (−5/−1/+1/+5), **hold „Testen"** until the rotor
+   *just* starts turning, then **Übernehmen** → captures `deadband_in` / `deadband_out`.
+2. **Durchfluss (IN & OUT at 100 % and 60 %):** pick **5 s or 10 s**, container on the scale,
+   **Messlauf starten** (auto-stops), then type the **weighed grams** (1 g ≈ 1 ml) → ml/s.
+   Keep runs short — at full speed the torso empties fast.
+3. **Überprüfen & Speichern:** check deadbands + rates + samples, then **Speichern**.
 
-The manual steps below are the underlying procedure — use them to do it by hand, to understand what
-the wizard does, or to cross-check a number.
+### Where it's stored (and how to copy it)
+The wizard writes `backend/calibration.json` on the Pi: deadbands, `rate_in`/`rate_out`, the
+duty→flow `samples`, and `dead_space_ml`. It's **per-machine + gitignored**, loaded on boot
+(`rate_in` is applied to the pump). To inspect or back it up:
+- `cat ~/pi_pumpsim/backend/calibration.json`
+- `scp -i ~/.ssh/pumpsim dose@<pi-ip>:~/pi_pumpsim/backend/calibration.json .`
+
+The manual steps below are the underlying procedure — use them by hand or to cross-check a number.
 
 ---
 
@@ -49,25 +56,26 @@ the wizard does, or to cross-check a number.
 - If reversed: set `PUMP_IN_IS_RPWM=true` in `backend/.env` (restart) **or** swap the motor leads M+/M−.
 - **Prime**: run IN until the tubing is full and air is purged before measuring anything.
 
-## 2. Deadband — minimum duty (IN and OUT)
-1. Set the speed slider low (~10 %), hold **IN**. No movement? Raise +5 % and retry.
-2. The lowest % that produces **steady** flow = `deadband_in`. Record it.
-3. Repeat with **OUT** → `deadband_out`.
-- Pick an **operating duty** comfortably above both (e.g. deadband + 20 %), but measure rates at **100 %** (below).
+## 2. Deadband — minimum duty where the rotor turns (IN and OUT)
+A peristaltic pump is positive-displacement, so liquid moves the instant the **rotor turns** — the
+"deadband" is simply the lowest duty at which the motor reliably **starts spinning** (below it, it
+stalls/hums). Find it by sight/feel, not by waiting for water:
+1. Set a low duty (~10 %), hold to test. Not turning? +5 % and retry until the rotor *just* turns.
+2. That duty = `deadband_in`. Repeat for **OUT** → `deadband_out`.
+- Pick an **operating duty** comfortably above both; measure flow rates at **100 %** (below).
 
 ## 3. Flow rate IN @ 100 % (`rate_in`)
-Most accurate = pump into a measuring cup:
-1. Direct the pump **output into the measuring cup** (or note the torso's volume scale).
-2. Speed = **100 %**. Press a timed run (e.g. **IN 30 s**) — it auto-stops.
-3. Read the volume delivered (ml). In the admin **Durchfluss** helper, enter **Volumen** + **Dauer (30)** → it shows **ml/s**.
-4. Repeat **3×** and average (the helper shows each; average by eye or re-enter the mean).
-5. Record `rate_in`. Tap **„Messung als Rate speichern"** to set it live, then write it into
-   `backend/.env` as `PUMP_RATE_ML_S=<rate_in>` so it persists across restarts.
+Use a scale (1 g ≈ 1 ml), pumping into a container:
+1. Container on the scale, tare it. Speed = **100 %**.
+2. Press a timed run — **keep it short (5–10 s)**; at full speed the torso empties fast.
+3. Weigh the delivered water (g ≈ ml). In the **Durchfluss** helper, enter **Volumen** + **Dauer** → **ml/s**.
+4. Repeat **3×** and average.
+5. Record `rate_in` (the guided wizard stores it automatically; `rate_in` is applied to the pump live).
 
 ## 4. Flow rate OUT @ 100 % (`rate_out`)
-1. Fill the torso to a known level, then run **OUT 30 s** at 100 % into the measuring cup.
-2. Read ml → enter in the helper → ml/s. Repeat 3×, average → `rate_out`.
-3. Record it (drain is usually slower; we'll use direction-specific rates in the model-follower later).
+1. With water in the torso, run **OUT for 5–10 s** at 100 % into the container on the scale.
+2. Weigh → g ≈ ml → ml/s. Repeat 3×, average → `rate_out`.
+3. Record it (drain is usually slower; direction-specific rates land in the model-follower later).
 
 ## 5. Torso volume mapping (level 0 ↔ 100)
 Goal: the **taped band** must sit where the game thinks `55–70` is.
@@ -76,6 +84,16 @@ Goal: the **taped band** must sit where the game thinks `55–70` is.
    (lower→upper tape = 55→70). From "across the band = 15 units":  `ml_per_unit ≈ (band ml) / 15`.
 3. `capacity_ml ≈ ml_per_unit × 100`. Sanity-check against the torso's nominal volume (~2–3 L).
 4. If the band ends up in the wrong place, re-tape so the lower tape sits at `ml_per_unit × 55` from empty.
+
+## 5b. Tube dead-space (optional — for later)
+With a peristaltic pump the **tubing** holds liquid that never reaches the torso. Two numbers matter
+once we build the model-follower:
+- **Prime volume** — from fully-empty tubes, run IN until water *just* reaches the torso; weigh that
+  amount = the dead-space you must pump before the level even starts to move.
+- **Residual on drain** — after a full OUT, the tubes/low point still hold some; note it so "empty"
+  is defined consistently.
+Record as `dead_space_ml`. The calibration file already has the field; the wizard doesn't capture it
+yet, so enter it by hand in `backend/calibration.json` for now.
 
 ## 6. Derived timings (game feel)
 - `t_reset` (full drain) ≈ `capacity_ml / rate_out` — set the reset screen to comfortably exceed this.

@@ -532,15 +532,17 @@ const de: Record<string, string> = {
     'Wir messen das Totband (Mindest-Tastgrad) und den Durchfluss. Bereithalten: Waage + Behälter (1 g ≈ 1 ml).',
   'cal.start': 'Starten',
   'cal.deadband': 'Totband',
-  'cal.deadbandHelp': 'Rampe starten – tippe „Es fließt jetzt!", sobald Flüssigkeit läuft.',
-  'cal.ramp': 'Rampe starten',
-  'cal.flowsNow': 'Es fließt jetzt!',
+  'cal.deadbandHelp':
+    'Tastgrad einstellen, „Testen" halten, bis sich der Rotor gerade dreht – dann übernehmen.',
+  'cal.test': 'Testen (halten)',
+  'cal.capture': 'Übernehmen',
   'cal.skip': 'Überspringen',
   'cal.flowTitle': 'Durchfluss messen',
   'cal.flowHelp':
     'Behälter auf die Waage, Messlauf starten, dann die gewogene Menge eintragen (1 g ≈ 1 ml).',
+  'cal.pickSecs': 'Messdauer',
   'cal.running': 'Messlauf läuft …',
-  'cal.startRun': 'Messlauf starten (30 s)',
+  'cal.startRun': 'Messlauf starten',
   'cal.grams': 'Gewogene Menge (g ≈ ml)',
   'cal.apply': 'Übernehmen',
   'cal.review': 'Überprüfen & Speichern',
@@ -548,6 +550,7 @@ const de: Record<string, string> = {
   'cal.save': 'Kalibrierung speichern',
   'cal.discard': 'Verwerfen',
   'cal.savedMsg': 'Kalibrierung gespeichert ✓',
+  'cal.savedWhere': 'Gespeichert in backend/calibration.json (überlebt Neustarts, beim Booten geladen).',
   'cal.close': 'Schließen',
 }
 

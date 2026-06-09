@@ -13,18 +13,18 @@
 
   let { onclose }: { onclose: () => void } = $props()
 
-  const RUN_S = 30
   type Phase = 'intro' | 'deadbandIn' | 'deadbandOut' | 'flow' | 'review' | 'done'
   let phase = $state<Phase>('intro')
 
-  // deadband ramp
-  let rampDuty = $state(0) // 0..100
-  let ramping = $state(false)
+  // deadband — manual finder (no auto-ramp): adjust duty, hold to test, capture
+  let dbDuty = $state(15) // 0..100
+  let dbHeld = $state(false)
   let deadbandIn = $state<number | null>(null)
   let deadbandOut = $state<number | null>(null)
 
   // flow measurement
   let flowIdx = $state(0)
+  let runSecs = $state(10)
   let running = $state(false)
   let countdown = $state(0)
   let grams = $state(0)
@@ -41,32 +41,38 @@
 
   function cleanup() {
     clearTimer()
-    ramping = false
+    dbHeld = false
     running = false
     stopPump()
   }
-  onMount(() => cleanup) // run cleanup on unmount
+  function close() {
+    cleanup()
+    onclose()
+  }
+  onMount(() => cleanup) // run cleanup on unmount (covers any close path)
 
   let target = $derived(FLOW_TARGETS[flowIdx])
-  let liveRate = $derived(mlPerSec(grams, RUN_S))
+  let liveRate = $derived(mlPerSec(grams, runSecs))
+  const clamp = (v: number) => Math.max(0, Math.min(100, v))
 
-  // --- deadband ramp ---
-  function startRamp(dir: Dir) {
-    clearTimer()
-    rampDuty = 0
-    ramping = true
-    api.admin.pump(dir, 0).catch(() => {})
-    timer = setInterval(() => {
-      rampDuty = Math.min(100, rampDuty + 3)
-      api.admin.pump(dir, rampDuty / 100).catch(() => {})
-      if (rampDuty >= 100) clearTimer() // reached the top; capture or redo
-    }, 350)
+  // --- deadband (manual) ---
+  function adjust(d: number) {
+    dbDuty = clamp(dbDuty + d)
+    if (dbHeld) api.admin.pump(curDir(), dbDuty / 100).catch(() => {}) // live if testing
   }
-  function captureDeadband(dir: Dir) {
-    clearTimer()
-    ramping = false
+  const curDir = (): Dir => (phase === 'deadbandIn' ? 'in' : 'out')
+  function testHold() {
+    dbHeld = true
+    api.admin.pump(curDir(), dbDuty / 100).catch(() => {})
+  }
+  function testRelease() {
+    dbHeld = false
     stopPump()
-    const v = round1(rampDuty) / 100
+  }
+  function captureDeadband() {
+    const dir = curDir()
+    testRelease()
+    const v = dbDuty / 100
     if (dir === 'in') {
       deadbandIn = v
       phase = 'deadbandOut'
@@ -74,11 +80,10 @@
       deadbandOut = v
       phase = 'flow'
     }
-    rampDuty = 0
   }
-  function skipDeadband(dir: Dir) {
-    cleanup()
-    rampDuty = 0
+  function skipDeadband() {
+    const dir = curDir()
+    testRelease()
     if (dir === 'in') {
       deadbandIn = null
       phase = 'deadbandOut'
@@ -92,8 +97,8 @@
   function startRun() {
     clearTimer()
     running = true
-    countdown = RUN_S
-    api.admin.run(target.dir, target.duty, RUN_S).catch(() => {})
+    countdown = runSecs
+    api.admin.run(target.dir, target.duty, runSecs).catch(() => {})
     timer = setInterval(() => {
       countdown = Math.max(0, countdown - 1)
       if (countdown <= 0) {
@@ -125,7 +130,7 @@
     <h2>{t('cal.title')}</h2>
     {#if phase === 'flow'}<span class="step">{t('cal.step')} {flowIdx + 1}/{FLOW_TARGETS.length}</span>{/if}
     <div class="sp"></div>
-    <button class="x" onclick={onclose} aria-label={t('admin.close')}>✕</button>
+    <button class="x" onclick={close} aria-label={t('admin.close')}>✕</button>
   </header>
 
   {#if phase === 'intro'}
@@ -134,17 +139,25 @@
       <button class="primary" onclick={() => (phase = 'deadbandIn')}>{t('cal.start')}</button>
     </div>
   {:else if phase === 'deadbandIn' || phase === 'deadbandOut'}
-    {@const dir = phase === 'deadbandIn' ? 'in' : 'out'}
     <div class="body">
-      <h3>{t('cal.deadband')} · {dirLabel(dir)}</h3>
+      <h3>{t('cal.deadband')} · {dirLabel(curDir())}</h3>
       <p class="lead">{t('cal.deadbandHelp')}</p>
-      <div class="gauge">{rampDuty}%</div>
-      {#if !ramping}
-        <button class="primary" onclick={() => startRamp(dir)}>{t('cal.ramp')}</button>
-      {:else}
-        <button class="flows" onclick={() => captureDeadband(dir)}>{t('cal.flowsNow')}</button>
-      {/if}
-      <button class="ghost" onclick={() => skipDeadband(dir)}>{t('cal.skip')}</button>
+      <div class="gauge">{dbDuty}%</div>
+      <div class="adjrow">
+        <button onclick={() => adjust(-5)}>−5</button>
+        <button onclick={() => adjust(-1)}>−1</button>
+        <button onclick={() => adjust(1)}>+1</button>
+        <button onclick={() => adjust(5)}>+5</button>
+      </div>
+      <button
+        class="test"
+        onpointerdown={testHold}
+        onpointerup={testRelease}
+        onpointerleave={testRelease}
+        onpointercancel={testRelease}>{t('cal.test')}</button
+      >
+      <button class="flows" onclick={captureDeadband}>{t('cal.capture')} ({dbDuty}%)</button>
+      <button class="ghost" onclick={skipDeadband}>{t('cal.skip')}</button>
     </div>
   {:else if phase === 'flow'}
     <div class="body">
@@ -154,7 +167,12 @@
         <div class="gauge">{countdown}s</div>
         <div class="muted">{t('cal.running')}</div>
       {:else}
-        <button class="primary" onclick={startRun}>{t('cal.startRun')}</button>
+        <div class="secs">
+          <span>{t('cal.pickSecs')}:</span>
+          <button class:sel={runSecs === 5} onclick={() => (runSecs = 5)}>5 s</button>
+          <button class:sel={runSecs === 10} onclick={() => (runSecs = 10)}>10 s</button>
+        </div>
+        <button class="primary" onclick={startRun}>{t('cal.startRun')} ({runSecs} s)</button>
         <label class="glabel">{t('cal.grams')}
           <input type="number" min="0" step="1" bind:value={grams} />
         </label>
@@ -180,12 +198,13 @@
         </tbody>
       </table>
       <button class="primary" onclick={save}>{t('cal.save')}</button>
-      <button class="ghost" onclick={onclose}>{t('cal.discard')}</button>
+      <button class="ghost" onclick={close}>{t('cal.discard')}</button>
     </div>
   {:else if phase === 'done'}
     <div class="body">
       <p class="lead ok">{t('cal.savedMsg')}</p>
-      <button class="primary" onclick={onclose}>{t('cal.close')}</button>
+      <p class="lead">{t('cal.savedWhere')}</p>
+      <button class="primary" onclick={close}>{t('cal.close')}</button>
     </div>
   {/if}
 </aside>
@@ -233,7 +252,7 @@
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
     justify-content: center;
   }
   h3 {
@@ -269,7 +288,7 @@
   button {
     border: none;
     border-radius: 14px;
-    padding: 20px;
+    padding: 18px;
     font-size: 19px;
     font-weight: 800;
   }
@@ -284,6 +303,14 @@
   .flows:disabled {
     opacity: 0.4;
   }
+  .test {
+    background: #3b7bd6;
+    color: #fff;
+    touch-action: none;
+  }
+  .test:active {
+    transform: scale(0.98);
+  }
   .ghost {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -291,6 +318,37 @@
     font-weight: 600;
     font-size: 15px;
     padding: 12px;
+  }
+  .adjrow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .adjrow button {
+    background: #1b2440;
+    border: 1px solid var(--border);
+    color: #e8edff;
+    padding: 16px 0;
+  }
+  .secs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    color: var(--dim);
+    font-size: 14px;
+  }
+  .secs button {
+    padding: 10px 16px;
+    font-size: 15px;
+    background: #1b2440;
+    border: 1px solid var(--border);
+    color: #e8edff;
+  }
+  .secs button.sel {
+    background: var(--spm-cyan, #00beca);
+    color: #04222a;
+    border-color: var(--spm-cyan, #00beca);
   }
   .glabel {
     display: flex;

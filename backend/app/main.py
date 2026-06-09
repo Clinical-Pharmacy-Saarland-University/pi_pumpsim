@@ -82,6 +82,7 @@ class CalibrationModel(BaseModel):
     deadband_out: float | None = Field(default=None, ge=0, le=1)
     rate_in: float | None = Field(default=None, ge=0)
     rate_out: float | None = Field(default=None, ge=0)
+    dead_space_ml: float | None = Field(default=None, ge=0)
     samples: list[CalibSample] = Field(default_factory=list)
 
 

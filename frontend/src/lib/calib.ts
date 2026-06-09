@@ -14,6 +14,7 @@ export interface Calibration {
   deadband_out: number | null
   rate_in: number | null
   rate_out: number | null
+  dead_space_ml: number | null
   samples: CalibSample[]
 }
 
@@ -30,6 +31,7 @@ export function buildCalibration(
   deadbandIn: number | null,
   deadbandOut: number | null,
   samples: CalibSample[],
+  deadSpaceMl: number | null = null,
 ): Calibration {
   const at100 = (d: Dir) =>
     samples.find((s) => s.dir === d && s.duty >= 0.999)?.ml_per_s ?? null
@@ -38,6 +40,7 @@ export function buildCalibration(
     deadband_out: deadbandOut,
     rate_in: at100('in'),
     rate_out: at100('out'),
+    dead_space_ml: deadSpaceMl,
     samples,
   }
 }

@@ -12,11 +12,12 @@ from pathlib import Path
 CALIB_PATH = Path(__file__).resolve().parents[2] / "calibration.json"
 
 DEFAULT: dict = {
-    "deadband_in": None,   # duty 0..1 where IN flow just starts
-    "deadband_out": None,  # duty 0..1 where OUT flow just starts
-    "rate_in": None,       # ml/s at 100% duty, fill
-    "rate_out": None,      # ml/s at 100% duty, drain
-    "samples": [],         # [{"dir": "in"|"out", "duty": 0..1, "ml_per_s": float}]
+    "deadband_in": None,    # duty 0..1 where the IN rotor just starts turning
+    "deadband_out": None,   # duty 0..1 where the OUT rotor just starts turning
+    "rate_in": None,        # ml/s at 100% duty, fill
+    "rate_out": None,       # ml/s at 100% duty, drain
+    "dead_space_ml": None,  # ml of tubing dead-volume (prime/residual); measured later
+    "samples": [],          # [{"dir": "in"|"out", "duty": 0..1, "ml_per_s": float}]
 }
 
 
