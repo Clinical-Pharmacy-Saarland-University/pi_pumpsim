@@ -7,7 +7,6 @@
   import { t } from '../locale.svelte'
   import { game, driveTo, retry, backToStories } from '../game.svelte'
   import Backdrop from '../Backdrop.svelte'
-  import Torso from '../Torso.svelte'
   import StarRating from '../StarRating.svelte'
   import { ADH_DAYS, ADH_START, simulateWeek, isCleanPlan, ADH_QUIZ, type WeekSim, type AdhQuizOpt } from '../stories/adherence'
   import { stars as starsFor, type Outcome } from '../flow'
@@ -65,7 +64,6 @@
   <Backdrop />
   <button class="cancel" onclick={backToStories} aria-label={t('common.back')}>✕</button>
   <div class="stage">
-    <aside class="torso-pane">{#if game.level}<Torso s={game.level} />{/if}</aside>
     <main class="content">
       {#key beat}
         <div class="beat">
@@ -136,9 +134,8 @@
 <style>
   .play { position: relative; height: 100%; overflow: hidden; }
   .cancel { position: absolute; top: 16px; inset-inline-start: 16px; z-index: 3; width: 46px; height: 46px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--dim); font-size: 18px; font-weight: 700; }
-  .stage { position: relative; z-index: 1; height: 100%; display: grid; grid-template-columns: 360px 1fr; align-items: center; gap: clamp(20px, 3vw, 56px); padding: 28px clamp(36px, 5vw, 80px) 28px clamp(24px, 3vw, 48px); }
-  .torso-pane { display: flex; align-items: center; justify-content: center; height: 100%; }
-  .content { display: flex; align-items: center; min-width: 0; height: 100%; }
+  .stage { position: relative; z-index: 1; height: 100%; display: grid; grid-template-columns: 1fr; align-items: center; padding: 28px clamp(36px, 5vw, 80px); }
+  .content { display: flex; align-items: center; justify-content: center; min-width: 0; height: 100%; }
   .beat { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: 100%; max-width: 760px; animation: beatin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
   .pill { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 18px; font-size: 14px; font-weight: 700; color: var(--spm-cyan-bright); }
   h1 { font-size: clamp(30px, 3.6vw, 46px); font-weight: 900; line-height: 1.1; }

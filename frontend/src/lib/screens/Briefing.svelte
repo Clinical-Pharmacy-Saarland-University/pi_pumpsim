@@ -2,7 +2,6 @@
   import { t } from '../locale.svelte'
   import { game, toDose, back } from '../game.svelte'
   import Backdrop from '../Backdrop.svelte'
-  import Torso from '../Torso.svelte'
   let patient = $derived(game.patient)
 </script>
 
@@ -11,9 +10,6 @@
   <button class="back" onclick={back}><span class="arrow">←</span>{t('common.back')}</button>
 
   <div class="stage">
-    <aside class="torso-pane">
-      {#if game.level}<Torso s={game.level} />{/if}
-    </aside>
     <main class="content">
       <div class="pill">{game.story ? t(game.story.titleKey) : 'SafePolyMed'}</div>
       <h1>{t(patient.lineKey)}</h1>
@@ -57,16 +53,9 @@
     z-index: 1;
     height: 100%;
     display: grid;
-    grid-template-columns: 360px 1fr;
+    grid-template-columns: 1fr;
     align-items: center;
-    gap: clamp(20px, 3vw, 56px);
-    padding: 28px clamp(36px, 5vw, 80px) 28px clamp(24px, 3vw, 48px);
-  }
-  .torso-pane {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
+    padding: 28px clamp(36px, 5vw, 80px);
   }
   .content {
     display: flex;
@@ -74,6 +63,7 @@
     align-items: flex-start;
     gap: 18px;
     max-width: 720px;
+    justify-self: center;
     animation: beatin 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) both;
   }
   .pill {

@@ -12,7 +12,6 @@
     cancelStory,
   } from '../game.svelte'
   import Backdrop from '../Backdrop.svelte'
-  import Torso from '../Torso.svelte'
   import Reveal from '../Reveal.svelte'
   import PlanCheck from '../PlanCheck.svelte'
   import FruitSort from '../FruitSort.svelte'
@@ -30,10 +29,6 @@
   <button class="cancel" onclick={cancelStory} aria-label={t('common.cancel')}>✕</button>
 
   <div class="stage">
-    <aside class="torso-pane">
-      {#if game.level}<Torso s={game.level} />{/if}
-    </aside>
-
     <main class="content">
       {#key game.phase}
         <div class="beat">
@@ -119,21 +114,15 @@
     z-index: 1;
     height: 100%;
     display: grid;
-    grid-template-columns: 360px 1fr;
+    grid-template-columns: 1fr;
     align-items: center;
-    gap: clamp(20px, 3vw, 56px);
-    padding: 28px clamp(36px, 5vw, 80px) 28px clamp(24px, 3vw, 48px);
-  }
-  .torso-pane {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
+    padding: 28px clamp(36px, 5vw, 80px);
   }
 
   .content {
     display: flex;
     align-items: center;
+    justify-content: center;
     min-width: 0;
     height: 100%;
   }
