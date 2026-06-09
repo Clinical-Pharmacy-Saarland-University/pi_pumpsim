@@ -3,6 +3,11 @@ uvicorn[standard]>=0.30
 pydantic>=2.7
 pydantic-settings>=2.3
 
+# Hardware PWM for the real pump (IBT-2 on GPIO12/13). Pure-Python (writes
+# /sys/class/pwm), imported lazily so it's harmless on a dev PC. Needs the
+# pwm-2chan overlay + a udev rule (both handled by deploy/install.sh).
+rpi-hardware-pwm
+
 # gpiozero is only needed on the Raspberry Pi (PUMP_BACKEND=real). It is imported
 # lazily, so it is NOT required on a dev PC. On the Pi it comes from apt
 # (python3-gpiozero / python3-lgpio, prebuilt) via deploy/install.sh — the venv is

@@ -1,0 +1,9 @@
+# Let the 'gpio' group use the sysfs hardware-PWM interface, so the pumpsim
+# backend (User=__USER__, Group=gpio) can drive the IBT-2 pump without root.
+#
+# Fires on every pwm uevent — including channel export, which creates pwmX/ —
+# and makes the whole chip tree group-readable/writable. If the backend starts
+# before the export is chmodded, systemd's Restart=always retries until it sticks.
+#
+# Installed to /etc/udev/rules.d/99-pwm.rules by deploy/install.sh.
+SUBSYSTEM=="pwm*", PROGRAM="/bin/sh -c 'chgrp -R gpio /sys/class/pwm/pwmchip*/ 2>/dev/null; chmod -R g+rwX /sys/class/pwm/pwmchip*/ 2>/dev/null'"

@@ -33,24 +33,26 @@ cd pi_pumpsim && deploy/update.sh    # git pull → rebuild UI → restart servi
 Copied from `backend/.env.example` on install. Key fields:
 | Key | Meaning |
 |---|---|
-| `PUMP_BACKEND` | `mock` (no hardware) or `real` (drive GPIO) |
-| `PUMP_GPIO_PIN` | BCM pin to the pump driver input |
-| `PUMP_RATE_ML_S`, `DEAD_VOLUME_ML` | calibrate against the real pump + tubing |
-| `TARGET_LOW_ML`, `TARGET_HIGH_ML`, `CAPACITY_ML`, `CLEARANCE_K` | game/PK tuning |
+| `PUMP_BACKEND` | `mock` (no hardware) or `real` (drive the IBT-2) |
+| `PUMP_RPWM_PIN` / `PUMP_LPWM_PIN` / `PUMP_REN_PIN` / `PUMP_LEN_PIN` | IBT-2 GPIO (BCM); defaults 12 / 13 / 23 / 24 |
+| `PUMP_PWM_HZ`, `PUMP_PWM_CHIP`, `PUMP_IN_IS_RPWM` | hardware-PWM freq, sysfs chip (`auto`), swap IN/OUT |
+| `PUMP_RATE_ML_S` | full-speed (100 % duty) flow, ml/s — set during calibration |
 
 After editing: `sudo systemctl restart pumpsim-backend`.
-(Calibration is also live-editable from the on-screen admin panel — press `A`.)
+(Calibration is also live-editable from the on-screen admin panel — **long-press the
+top-left corner** on the Start screen, or press `A`.)
 
 ## ⚠️ Pump wiring — IBT-2 (BTS7960) H-bridge (don't skip)
 The pump is a reversible DC motor driven by an **IBT-2** H-bridge. The Pi provides
 **logic signals only** — the motor runs off its **own external supply**. Direction is
-set by *which* PWM input you drive (RPWM vs LPWM); both enables are held high.
+set by *which* PWM input you drive (RPWM vs LPWM); both enables are driven together
+(high while pumping, low = a hard stop). Speed = hardware PWM duty (active-high).
 
 **Signal side — IBT-2 → Raspberry Pi** (with our cable colours):
 
 | IBT-2 pin | wire colour | Raspberry Pi (BCM / physical) |
 |---|---|---|
-| VCC  | 🔴 red    | **5V**  (pin 2)   |
+| VCC  | 🔴 red    | **3.3V** (pin 1) ⚠️ **not 5V** |
 | GND  | ⚫ black  | **GND** (pin 14) — common ground |
 | RPWM | 🟢 green  | **GPIO12** (pin 32, PWM0) |
 | LPWM | ⚪ white  | **GPIO13** (pin 33, PWM1) |
@@ -69,9 +71,12 @@ set by *which* PWM input you drive (RPWM vs LPWM); both enables are held high.
 Notes:
 - On the IBT-2, logic `GND` and power `B−` are tied on the board, so Pi GND + supply−
   give a shared reference. Common ground is essential.
-- 3.3 V GPIO into a 5 V-VCC IBT-2 normally works; if it's flaky, move VCC to **3.3 V** (pin 1).
-- These pins are the defaults in `tools/pump_test.py` and (will be) `RealPump`'s
-  `PUMP_RPWM_PIN` / `PUMP_LPWM_PIN` / `PUMP_REN_PIN` / `PUMP_LEN_PIN`.
+- ⚠️ **VCC must be 3.3 V (pin 1), not 5 V.** At 5 V the BTS7960 input threshold sits
+  above the Pi's 3.3 V GPIO HIGH → erratic / inverted speed. (This cost us a long debug.)
+- These pins are the defaults in `tools/pump_test.py` and `RealPump`
+  (`PUMP_RPWM_PIN` / `PUMP_LPWM_PIN` / `PUMP_REN_PIN` / `PUMP_LEN_PIN`). Speed uses
+  **hardware PWM** via `rpi-hardware-pwm`; `deploy/install.sh` adds the `pwm-2chan`
+  overlay + a udev rule so the backend can drive it without root.
 
 **Bench-test it first** (independent of the game):
 ```bash
