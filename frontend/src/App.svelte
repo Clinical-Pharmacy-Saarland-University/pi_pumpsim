@@ -47,7 +47,7 @@
     }
   })
 
-  const playPhases = ['dose', 'dosing', 'reveal', 'story', 'planCheck', 'mechanism', 'decision', 'decided', 'variability', 'settling', 'fruits']
+  const playPhases = ['dose', 'dosing', 'reveal', 'story', 'planCheck', 'mechanism', 'medcheck', 'decision', 'decided', 'variability', 'settling', 'fruits']
 
   function onKey(e: KeyboardEvent) {
     const tg = e.target as HTMLElement | null

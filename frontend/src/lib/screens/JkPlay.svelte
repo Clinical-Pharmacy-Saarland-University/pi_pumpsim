@@ -8,6 +8,7 @@
   import { game, driveTo, retry, backToStories } from '../game.svelte'
   import Backdrop from '../Backdrop.svelte'
   import Torso from '../Torso.svelte'
+  import StarRating from '../StarRating.svelte'
   import { JK_START, JK_FLOOR, JK_DRAIN_TARGET, JK_ACTIONS, JK_HELP_IDS, type JkAction } from '../stories/johanniskraut'
   import { stars as starsFor, type Outcome } from '../flow'
 
@@ -19,8 +20,11 @@
   let koederTapped = $state(false)
   let fb = $state<{ key: string; bad: boolean } | null>(null)
 
-  let bothHelps = $derived(JK_HELP_IDS.every((id) => helped.includes(id)))
-  let starCount = $derived(starsFor(outcome === 'win', !koederTapped, bothHelps))
+  // clever: full unless a decoy („Köder") was tapped → half. pro: how many of the
+  // protective help actions were found (both = full, one = half, none = 0).
+  let helpsFound = $derived(JK_HELP_IDS.filter((id) => helped.includes(id)).length)
+  let proQ = $derived(helpsFound >= JK_HELP_IDS.length ? 1 : helpsFound >= 1 ? 0.5 : 0)
+  let starCount = $derived(starsFor(outcome === 'win', !koederTapped ? 1 : 0.5, proQ))
   let outCls = $derived(outcome === 'win' ? 'good' : 'bad')
 
   onMount(() => driveTo(JK_START, 8, () => {}))
@@ -87,7 +91,7 @@
           {:else if beat === 'outcome'}
             <h1 class={outCls}>{t('jk.out.' + outcome + '.title')}</h1>
             <p class="lead">{t('jk.out.' + outcome + '.sub')}</p>
-            {#if outcome === 'win'}<div class="stars">{#each [0, 1, 2] as i}<span class:on={i < starCount}>★</span>{/each}</div>{/if}
+            {#if outcome === 'win'}<StarRating score={starCount} />{/if}
             <div class="dyk">
               <span class="dlbl">{t('out.dyk')}</span>
               <p>{t('jk.out.dyk1')}</p>
@@ -127,8 +131,6 @@
   .fb { font-size: clamp(17px, 1.9vw, 24px); font-weight: 800; line-height: 1.4; }
   .fb.good { color: var(--green); } .fb.bad { color: var(--toxic); }
   .dots { font-size: 56px; color: var(--dim); animation: pulsedots 1s ease-in-out infinite; }
-  .stars { display: flex; gap: 10px; font-size: 52px; }
-  .stars span { color: var(--surface2); } .stars span.on { color: var(--grape); text-shadow: 0 0 18px rgba(255, 183, 3, 0.55); }
   .dyk { max-width: 680px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 22px; }
   .dlbl { font-size: 13px; color: var(--grape); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
   .dyk p { margin-top: 6px; font-size: 17px; line-height: 1.5; }

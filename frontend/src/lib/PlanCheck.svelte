@@ -1,11 +1,19 @@
 <script lang="ts">
-  // Tactile detective: the morning's items — tap the one that raised the level.
-  // Every tap explains itself (per-item feedback). Wrong = explain + try again.
+  // Tactile tap-to-find beat. Default = the detective (the morning's items: tap the
+  // one that raised the level); reused for the Medikamenten-Check via props. Every
+  // tap explains itself (per-item feedback). Wrong = explain + try again.
   import { t } from './locale.svelte'
   import { game, planCheckDone } from './game.svelte'
-  import type { PlanItem } from './events'
+  import type { PlanCheck, PlanItem } from './events'
 
-  let plan = $derived(game.events[game.idx].planCheck!)
+  let {
+    data,
+    onDone = planCheckDone,
+  }: { data?: PlanCheck; onDone?: (firstTryCorrect: boolean) => void } = $props()
+
+  let plan = $derived(data ?? game.events[game.idx].planCheck!)
+  // items can be limited to one age register (e.g. the med-check decoys)
+  let items = $derived(plan.items.filter((it) => !it.register || it.register === game.ageGroup))
   let wrongIds = $state<string[]>([])
   let solved = $state(false)
   let feedback = $state<string | null>(null)
@@ -18,7 +26,7 @@
       solved = true
       feedbackBad = false
       const clean = wrongIds.length === 0
-      setTimeout(() => planCheckDone(clean), 1200)
+      setTimeout(() => onDone(clean), 1200)
     } else {
       feedbackBad = true
       if (!wrongIds.includes(item.id)) wrongIds = [...wrongIds, item.id]
@@ -29,7 +37,7 @@
 <div class="plan">
   <h2>{t(plan.promptKey)}</h2>
   <div class="list">
-    {#each plan.items as it}
+    {#each items as it}
       <button
         class="item"
         class:bad={wrongIds.includes(it.id)}

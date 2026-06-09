@@ -3,6 +3,7 @@
   import { game, retry, backToStories } from '../game.svelte'
   import Backdrop from '../Backdrop.svelte'
   import Torso from '../Torso.svelte'
+  import StarRating from '../StarRating.svelte'
 
   let info = $derived(
     game.outcome === 'win'
@@ -26,16 +27,16 @@
       <p class="sub">{t(info.sub, { name: t(game.patient.nameKey) })}</p>
 
       {#if game.outcome === 'win'}
-        <div class="stars">
-          {#each [0, 1, 2] as i}<span class:on={i < game.stars} style="--i:{i}">★</span>{/each}
-        </div>
-        <div class="count">{t('out.stars', { n: game.stars })}</div>
+        <StarRating score={game.stars} />
       {/if}
 
       <div class="dyk">
         <span class="lbl">{t('out.dyk')}</span>
         <p>{t('out.dyk.text')}</p>
-        {#if game.outcome === 'win'}<p class="second">{t('out.dyk2.text')}</p>{/if}
+        {#if game.outcome === 'win'}
+          <p class="second">{t('out.dyk2.text')}</p>
+          <p class="second">{t('out.dyk3.text')}</p>
+        {/if}
       </div>
 
       <div class="actions">
@@ -96,26 +97,6 @@
     font-size: clamp(18px, 2vw, 23px);
     line-height: 1.5;
   }
-  .stars {
-    display: flex;
-    gap: 10px;
-    font-size: 56px;
-    margin-top: 4px;
-  }
-  .stars span {
-    color: var(--surface2);
-    transform: scale(0.7);
-  }
-  .stars span.on {
-    color: var(--grape);
-    text-shadow: 0 0 18px rgba(255, 183, 3, 0.55);
-    animation: pop 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both;
-    animation-delay: calc(var(--i) * 0.15s + 0.2s);
-  }
-  .count {
-    font-size: 16px;
-    color: var(--dim);
-  }
   .dyk {
     max-width: 680px;
     background: var(--surface);
@@ -153,23 +134,9 @@
       transform: translateY(22px);
     }
   }
-  @keyframes pop {
-    from {
-      opacity: 0;
-      transform: scale(0.2) rotate(-25deg);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
   @media (prefers-reduced-motion: reduce) {
-    .content,
-    .stars span.on {
+    .content {
       animation: none;
-    }
-    .stars span.on {
-      transform: scale(1);
     }
   }
 </style>

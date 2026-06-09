@@ -26,8 +26,30 @@ export function outcomeForLevel(level: number, c: LevelCfg = DEFAULT_CFG): Outco
   return 'win'
 }
 
-/** Stars (0–3): base for a win + a "clever" star + a "pro" star. 0 on any loss. */
-export function stars(win: boolean, clever: boolean, pro: boolean): number {
+/**
+ * Stars (0–3, in 0.5 steps): 1 for a win + a "clever" and a "pro" bonus. Each
+ * bonus is earned fully (1), partly (0.5 — a stumble: a retry / one wrong tap) or
+ * not at all (0) — that 0.5 is what produces HALF stars. 0 on any loss.
+ *   3.0 = flawless · 2.5 = one small stumble · … · 1.0 = scraped the win.
+ */
+export function stars(win: boolean, clever: number, pro: number): number {
   if (!win) return 0
-  return 1 + (clever ? 1 : 0) + (pro ? 1 : 0)
+  return 1 + clever + pro
+}
+
+/**
+ * Locale key for the rank TITLE shown next to the stars, from a star score.
+ * Snaps to the defined rungs (loss=0, then 1.0/1.5/2.0/2.5/3.0 → ×10). t()
+ * resolves the age register (kid vs. adult) on top.
+ */
+export function rankKey(score: number): string {
+  const tenths = Math.max(0, Math.min(30, Math.round(score * 10)))
+  const rung =
+    tenths === 0 ? 0 : tenths <= 10 ? 10 : tenths <= 15 ? 15 : tenths <= 20 ? 20 : tenths <= 25 ? 25 : 30
+  return `rank.${rung}`
+}
+
+/** Format a star score for display: German decimal comma, trailing ".0" dropped. */
+export function formatStars(score: number): string {
+  return (Number.isInteger(score) ? String(score) : score.toFixed(1)).replace('.', ',')
 }

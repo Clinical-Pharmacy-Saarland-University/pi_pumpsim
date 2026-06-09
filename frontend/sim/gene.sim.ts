@@ -25,10 +25,11 @@ ok('keep codeine = overdose', (() => { const o = GENE_OPTIONS.find((x) => x.id =
 ok('tramadol = retry trap (also CYP2D6)', GENE_OPTIONS.find((x) => x.id === 'tramadol')!.result === 'retry')
 ok('increase codeine = adult-only overdose', (() => { const o = GENE_OPTIONS.find((x) => x.id === 'increase')!; return o.result === 'over' && o.adultOnly === true })())
 
-// stars
-ok('win + predict-perfect + no-tramadol = 3★', stars(true, true, true) === 3)
-ok('win + sloppy predict = 2★', stars(true, false, true) === 2)
-ok('loss = 0★', stars(false, true, true) === 0)
+// stars (half-star: predict full=1/sloppy=0.5; pro lost if tramadol trap tapped)
+ok('win + predict-perfect + no-tramadol = 3★', stars(true, 1, 1) === 3)
+ok('win + sloppy predict = 2.5★', stars(true, 0.5, 1) === 2.5)
+ok('win + tramadol trap = 2★', stars(true, 1, 0) === 2)
+ok('loss = 0★', stars(false, 1, 1) === 0)
 
 console.log(`\n${fails === 0 ? '✅ ALL PASS' : '❌ ' + fails + ' FAILED'}`)
 process.exit(fails === 0 ? 0 : 1)

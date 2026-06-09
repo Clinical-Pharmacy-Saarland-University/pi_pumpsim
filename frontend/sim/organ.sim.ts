@@ -26,9 +26,11 @@ ok('finale: correct mapping scores true', organFinaleCorrect(perfect))
 ok('finale: mid→reduce is required', ORGAN_FINALE.find((r) => r.id === 'mid')!.correct === 'reduce')
 ok('finale: wrong mapping → false', !organFinaleCorrect({ ...perfect, mid: 'standard' }))
 
-// stars
-ok('win + detective-first + dial-clean+finale = 3★', stars(true, true, true) === 3)
-ok('loss = 0★', stars(false, true, true) === 0)
+// stars (half-star: detective full=1/stumble=0.5; pro full=1/one-slip=0.5/both=0)
+ok('win + detective-first + dial-clean+finale = 3★', stars(true, 1, 1) === 3)
+ok('win + stumbled detective = 2.5★', stars(true, 0.5, 1) === 2.5)
+ok('win + one slip (trap or finale) = 2.5★', stars(true, 1, 0.5) === 2.5)
+ok('loss = 0★', stars(false, 1, 1) === 0)
 
 // full traces
 const trace = (notchId: string) => {

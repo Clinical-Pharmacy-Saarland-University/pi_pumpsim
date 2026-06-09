@@ -6,6 +6,7 @@
 //   → outcome. The strategy decision drives the torso directly (no needle).
 import { api, connectLevel } from './api'
 import { DOSE, type Choice, type GameEvent, type Patient } from './events'
+import { stars as scoreStars } from './flow'
 import { setAgeLocale } from './locale.svelte'
 import { STORIES, type Story } from './stories'
 import type { LevelState } from './types'
@@ -21,6 +22,7 @@ export type Phase =
   | 'story'
   | 'planCheck'
   | 'mechanism'
+  | 'medcheck'
   | 'decision'
   | 'decided'
   | 'variability'
@@ -56,8 +58,8 @@ export const game = $state({
   lastCorrect: null as boolean | null,
   revealKind: 'dose' as RevealKind,
   choice: null as Choice | null, // the picked strategy (for the 'decided' feedback)
-  // pc = detective (first-try clean), k = fruit finale (all correct)
-  score: { kCorrect: 0, kTotal: 0, pcCorrect: 0, pcTotal: 0 },
+  // pc = detective (first-try clean across events); fruitQ = finale grade (0/0.5/1)
+  score: { pcCorrect: 0, pcTotal: 0, fruitQ: 0 },
   outcome: null as Outcome | null,
   stars: 0,
 })
@@ -110,7 +112,7 @@ function moveTo(target: number, then: () => void) {
 }
 
 const PLAY_PHASES = [
-  'dose', 'dosing', 'reveal', 'story', 'planCheck', 'mechanism', 'decision', 'decided',
+  'dose', 'dosing', 'reveal', 'story', 'planCheck', 'mechanism', 'medcheck', 'decision', 'decided',
   'variability', 'settling', 'fruits',
 ]
 
@@ -183,7 +185,7 @@ export function selectStory(story: Story): void {
   game.idx = 0
   game.base = DOSE.standard
   game.factors = {}
-  game.score = { kCorrect: 0, kTotal: 0, pcCorrect: 0, pcTotal: 0 }
+  game.score = { pcCorrect: 0, pcTotal: 0, fruitQ: 0 }
   game.choice = null
   game.outcome = null
   game.stars = 0
@@ -254,7 +256,14 @@ export function planCheckDone(firstTryCorrect: boolean): void {
   if (firstTryCorrect) game.score.pcCorrect++
   game.phase = 'mechanism'
 }
+// the bridge ("Grapefruit gefunden") → the Medikamenten-Check (which drug?)
 export function mechanismNext(): void {
+  game.phase = 'medcheck'
+}
+// Medikamenten-Check graded like the detective → both feed the "clever" star
+export function medCheckDone(firstTryCorrect: boolean): void {
+  game.score.pcTotal++
+  if (firstTryCorrect) game.score.pcCorrect++
   game.phase = 'decision'
 }
 
@@ -301,10 +310,9 @@ function startFruits(): void {
   game.lastCorrect = null
   game.phase = 'fruits'
 }
-export function fruitsDone(allCorrect: boolean): void {
-  game.lastCorrect = allCorrect
-  game.score.kTotal++
-  if (allCorrect) game.score.kCorrect++
+export function fruitsDone(grade: number): void {
+  game.lastCorrect = grade >= 1
+  game.score.fruitQ = grade
   finishOutcome()
 }
 
@@ -313,9 +321,13 @@ function finishOutcome(): void {
   const z = game.level?.zone ?? 'under'
   game.outcome = z === 'in' ? 'win' : z === 'over' || z === 'critical_high' ? 'over' : 'under'
   if (game.outcome === 'win') {
-    const detectiveClean = game.score.pcTotal > 0 && game.score.pcCorrect === game.score.pcTotal
-    const fruitClean = game.score.kTotal > 0 && game.score.kCorrect === game.score.kTotal
-    game.stars = 1 + (detectiveClean ? 1 : 0) + (fruitClean ? 1 : 0)
+    // clever: each identification (the food cause AND the affected drug) is worth
+    // half a star — found first-try = keep it, stumbled = lose it. Fumble both and
+    // clever hits 0, so a sloppy win (both IDs stumbled + a botched finale) can fall
+    // all the way to 1.0★. pro: the fruit-finale grade (0/0.5/1).
+    const stumbles = game.score.pcTotal - game.score.pcCorrect
+    const clever = Math.max(0, 1 - 0.5 * stumbles)
+    game.stars = scoreStars(true, clever, game.score.fruitQ)
   } else {
     game.stars = 0
   }

@@ -8,7 +8,8 @@
   let fg = $derived(game.events[game.idx].fruitGame!)
   let selected = $state(new Set<string>())
   let confirmed = $state(false)
-  let correct = $state(false)
+  // grade: perfect=1, one mistake=0.5 (half star), 2+ mistakes=0
+  let grade = $state(0)
 
   function toggle(id: string) {
     if (confirmed) return
@@ -19,7 +20,8 @@
   }
   function confirm() {
     if (confirmed) return
-    correct = fg.fruits.every((f) => f.interacts === selected.has(f.id))
+    const wrong = fg.fruits.filter((f) => f.interacts !== selected.has(f.id)).length
+    grade = wrong === 0 ? 1 : wrong === 1 ? 0.5 : 0
     confirmed = true
   }
   const tileRight = (f: Fruit) => f.interacts === selected.has(f.id)
@@ -29,8 +31,8 @@
   {#if !confirmed}
     <h2>{t(fg.promptKey)}</h2>
   {:else}
-    <div class="fb {correct ? 'good' : 'bad'}">
-      {correct ? t('fruits.correct') : t('fruits.wrong')}
+    <div class="fb {grade >= 1 ? 'good' : grade > 0 ? 'warn' : 'bad'}">
+      {grade >= 1 ? t('fruits.correct') : grade > 0 ? t('fruits.close') : t('fruits.wrong')}
     </div>
   {/if}
 
@@ -62,7 +64,7 @@
     <p class="credit">{t('fruits.credit')}</p>
   {:else}
     <p class="lesson">{t(fg.lessonKey)}</p>
-    <button class="btn primary" onclick={() => fruitsDone(correct)}>{t('common.next')}</button>
+    <button class="btn primary" onclick={() => fruitsDone(grade)}>{t('common.next')}</button>
   {/if}
 </div>
 
@@ -86,6 +88,9 @@
   }
   .fb.good {
     color: var(--green);
+  }
+  .fb.warn {
+    color: var(--grape);
   }
   .fb.bad {
     color: var(--toxic);

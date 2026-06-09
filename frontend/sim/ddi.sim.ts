@@ -36,16 +36,17 @@ const oneWrong = { ...perfect, metformin: true }
 ok('finale: one wrong → false', !ddiFinaleCorrect(oneWrong))
 ok('finale has 3 prüfen + 3 unbedenklich', DDI_FINALE.filter((i) => i.check).length === 3 && DDI_FINALE.filter((i) => !i.check).length === 3)
 
-// --- stars ---
-ok('win + pair-first-try + finale-perfect = 3★', stars(true, true, true) === 3)
-ok('win + sloppy pair + perfect finale = 2★', stars(true, false, true) === 2)
-ok('loss = 0★', stars(false, true, true) === 0)
+// --- stars (half-star: clever full=1/stumble=0.5, pro finale full=1/missed=0) ---
+ok('win + pair-first-try + finale-perfect = 3★', stars(true, 1, 1) === 3)
+ok('win + sloppy pair + perfect finale = 2.5★', stars(true, 0.5, 1) === 2.5)
+ok('win + first-try pair, missed finale = 2★', stars(true, 1, 0) === 2)
+ok('loss = 0★', stars(false, 1, 1) === 0)
 
 // --- full playthrough traces ---
 function play(optId: string, pairFirst: boolean, finaleOk: boolean) {
   const o = DDI_OPTIONS.find((x) => x.id === optId)!
   const out = outcomeForLevel(o.target)
-  const s = stars(out === 'win', pairFirst, out === 'win' && finaleOk)
+  const s = stars(out === 'win', pairFirst ? 1 : 0.5, out === 'win' && finaleOk ? 1 : 0)
   return { torso: o.target, outcome: out, stars: s }
 }
 const win = play('safe', true, true)

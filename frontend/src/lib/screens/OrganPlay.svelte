@@ -6,6 +6,7 @@
   import { game, driveTo, retry, backToStories } from '../game.svelte'
   import Backdrop from '../Backdrop.svelte'
   import Torso from '../Torso.svelte'
+  import StarRating from '../StarRating.svelte'
   import {
     ORGAN_START, ORGAN_DOSE, ORGAN_EVENT_TARGET, ORGAN_DETECT, ORGAN_NOTCHES, ORGAN_TRAP_FEEDBACK,
     ORGAN_FINALE, ORGAN_MEASURES, organFinaleCorrect, EGFR, type DialNotch, type OrganDetectItem,
@@ -24,7 +25,10 @@
 
   let notches = $derived(ORGAN_NOTCHES.filter((n) => game.ageGroup === 'adult' || !n.adultOnly))
   let outcome = $derived<Outcome>(chosen?.result ?? 'win')
-  let starCount = $derived(starsFor(outcome === 'win', detectiveFirstTry, !trapTapped && finalePerfect))
+  // clever: full if the cause was found first try, else half. pro: full only if no
+  // trap AND a perfect finale; half if one of the two slipped; none if both did.
+  let proQ = $derived((!trapTapped && finalePerfect) ? 1 : (!trapTapped || finalePerfect) ? 0.5 : 0)
+  let starCount = $derived(starsFor(outcome === 'win', detectiveFirstTry ? 1 : 0.5, proQ))
   let outCls = $derived(outcome === 'win' ? 'good' : outcome === 'under' ? 'warn' : 'bad')
   let decidedCls = $derived(chosen?.result === 'win' ? 'good' : 'bad')
 
@@ -161,7 +165,7 @@
           {:else if beat === 'outcome'}
             <h1 class={outCls}>{t('organ.out.' + outcome + '.title')}</h1>
             <p class="lead">{t('organ.out.' + outcome + '.sub')}</p>
-            {#if outcome === 'win'}<div class="stars">{#each [0, 1, 2] as i}<span class:on={i < starCount}>★</span>{/each}</div>{/if}
+            {#if outcome === 'win'}<StarRating score={starCount} />{/if}
             <div class="dyk">
               <span class="dlbl">{t('out.dyk')}</span>
               <p>{t('organ.out.dyk1')}</p>
@@ -224,8 +228,6 @@
   .binbtns { display: flex; gap: 6px; flex: none; }
   .binbtn { border: 1.5px solid var(--border); background: var(--surface2); border-radius: 10px; padding: 8px 10px; font-size: 13px; font-weight: 700; }
   .binbtn.sel { border-color: var(--spm-cyan); background: rgba(0, 190, 202, 0.18); color: var(--spm-cyan-bright); }
-  .stars { display: flex; gap: 10px; font-size: 52px; }
-  .stars span { color: var(--surface2); } .stars span.on { color: var(--grape); text-shadow: 0 0 18px rgba(255, 183, 3, 0.55); }
   .dyk { max-width: 680px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 22px; }
   .dlbl { font-size: 13px; color: var(--grape); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
   .dyk p { margin-top: 6px; font-size: 17px; line-height: 1.5; }

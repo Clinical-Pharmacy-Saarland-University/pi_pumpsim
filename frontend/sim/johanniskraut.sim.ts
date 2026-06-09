@@ -23,10 +23,11 @@ ok('drain target heads below the floor', JK_DRAIN_TARGET < JK_FLOOR)
 // induction only lowers — there is NO overdose ending in this story
 ok('no overdose path (only down)', JK_DRAIN_TARGET < JK_START && JK_FLOOR < JK_START)
 
-// stars: win + no-koeder + both-helps = 3
-ok('clean rescue = 3★', stars(true, true, true) === 3)
-ok('rescue but tapped a koeder = 2★', stars(true, false, true) === 2)
-ok('rejection = 0★', stars(false, true, true) === 0)
+// stars (half-star: clever full=1/koeder=0.5; pro both-helps=1/one=0.5/none=0)
+ok('clean rescue = 3★', stars(true, 1, 1) === 3)
+ok('rescue but tapped a koeder = 2.5★', stars(true, 0.5, 1) === 2.5)
+ok('rescue, only one help found = 2.5★', stars(true, 1, 0.5) === 2.5)
+ok('rejection = 0★', stars(false, 1, 1) === 0)
 
 console.log(`\n${fails === 0 ? '✅ ALL PASS' : '❌ ' + fails + ' FAILED'}`)
 process.exit(fails === 0 ? 0 : 1)

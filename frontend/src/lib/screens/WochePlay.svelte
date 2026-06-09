@@ -8,6 +8,7 @@
   import { game, driveTo, retry, backToStories } from '../game.svelte'
   import Backdrop from '../Backdrop.svelte'
   import Torso from '../Torso.svelte'
+  import StarRating from '../StarRating.svelte'
   import { ADH_DAYS, ADH_START, simulateWeek, isCleanPlan, ADH_QUIZ, type WeekSim, type AdhQuizOpt } from '../stories/adherence'
   import { stars as starsFor, type Outcome } from '../flow'
 
@@ -22,7 +23,8 @@
 
   let quizOpts = $derived(ADH_QUIZ.filter((q) => game.ageGroup === 'adult' || !q.adultOnly))
   let outcome = $derived<Outcome>(week?.outcome ?? 'win')
-  let starCount = $derived(starsFor(outcome === 'win', planClean, quizCorrect))
+  // clever: full for a clean 7-day plan, half otherwise. pro: the closing quiz.
+  let starCount = $derived(starsFor(outcome === 'win', planClean ? 1 : 0.5, quizCorrect ? 1 : 0))
   let outCls = $derived(outcome === 'win' ? 'good' : outcome === 'under' ? 'warn' : 'bad')
 
   onMount(() => driveTo(ADH_START, 8, () => {}))
@@ -114,7 +116,7 @@
           {:else if beat === 'outcome'}
             <h1 class={outCls}>{t('adh.out.' + outcome + '.title')}</h1>
             <p class="lead">{t('adh.out.' + outcome + '.sub')}</p>
-            {#if outcome === 'win'}<div class="stars">{#each [0, 1, 2] as i}<span class:on={i < starCount}>★</span>{/each}</div>{/if}
+            {#if outcome === 'win'}<StarRating score={starCount} />{/if}
             <div class="dyk">
               <span class="dlbl">{t('out.dyk')}</span>
               <p>{t('adh.out.dyk1')}</p>
@@ -161,8 +163,6 @@
   .opt:active { transform: scale(0.98); border-color: var(--spm-cyan); background: var(--surface2); }
   .fb { font-size: clamp(18px, 2vw, 26px); font-weight: 800; line-height: 1.4; }
   .fb.good { color: var(--green); } .fb.bad { color: var(--toxic); }
-  .stars { display: flex; gap: 10px; font-size: 52px; }
-  .stars span { color: var(--surface2); } .stars span.on { color: var(--grape); text-shadow: 0 0 18px rgba(255, 183, 3, 0.55); }
   .dyk { max-width: 680px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 22px; }
   .dlbl { font-size: 13px; color: var(--grape); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
   .dyk p { margin-top: 6px; font-size: 17px; line-height: 1.5; }

@@ -139,12 +139,15 @@ const de: Record<string, string> = {
   'dec.prompt.young': 'Was tust du jetzt?',
   'dec.reduce': 'Dosis senken',
   'dec.stopGrapefruit': 'Grapefruit weglassen',
+  'dec.askPro': 'Apotheke/Arztpraxis fragen',
   'dec.spaceOut': 'Grapefruit & Tablette zeitversetzt einnehmen',
   'dec.increase': 'Dosis erhöhen',
   // per-choice feedback (always say why)
   'dec.fb.stopGrapefruit': 'Genau – ohne Grapefruit sinkt der Spiegel wieder. Der sauberste Weg!',
   'dec.fb.stopGrapefruit.adult':
     'Richtig – Grapefruit absetzen; das Enzym erholt sich, der Spiegel normalisiert sich. Bevorzugte Lösung.',
+  'dec.fb.askPro':
+    'Sehr gut – bei einer möglichen Wechselwirkung nicht selbst an der Dosis drehen. Apotheke oder Arztpraxis prüfen die Medikation. In diesem Fall lautet die sichere Lösung: Grapefruit weglassen; alternativ kann ärztlich ein weniger CYP3A4-abhängiges Statin geprüft werden.',
   'dec.fb.reduce': 'Mal sehen … aber Vorsicht: die Grapefruit-Menge schwankt von Tag zu Tag.',
   'dec.fb.reduce.adult':
     'Senkt den Spiegel zwar – aber bei schwankender Grapefruit-Menge ist die Hemmung unberechenbar. Riskant.',
@@ -167,13 +170,41 @@ const de: Record<string, string> = {
     'Wochenlang läuft alles super! 🎉 Doch eines Morgens, nach dem Joggen, frühstückt Herr Schmidt so richtig: Müsli mit Apfel und Birne, dazu ein Kaffee und ein großes Glas Grapefruitsaft.',
   'ev.grapefruit.story.adult':
     'Über Wochen ist Herr Schmidt stabil eingestellt. Eines Morgens – nach dem Joggen – frühstückt er ausgiebig: Müsli mit Apfel und Birne, ein Kaffee und ein großes Glas Grapefruitsaft.',
-  // mechanism lesson (after the detective reveals the grapefruit)
+  // bridge (after the detective reveals the grapefruit): name it + set up the med-check
+  'ev.grapefruit.bridge.title': 'Grapefruit gefunden!',
+  'ev.grapefruit.bridge.title.adult': 'Grapefruit identifiziert',
   'ev.grapefruit.lesson':
-    'Der Grapefruitsaft hemmt das Abbau-Enzym CYP3A4 – Simvastatin sammelt sich an, der Spiegel steigt. Apfel, Birne und Kaffee sind harmlos.',
-  'ev.grapefruit.lesson.young':
-    'Der Grapefruitsaft bremst das „Aufräum-Enzym“ (CYP3A4) – dann wird Simvastatin langsamer abgebaut und es wird zu viel. Apfel, Birne und Kaffee sind dagegen völlig harmlos.',
+    'Genau – Grapefruit! 🍊 Aber wichtig: Grapefruit macht nicht jedes Medikament gefährlich. Sie blockiert eine bestimmte Abbau-Route im Darm. Simvastatin benutzt genau diese Route – deshalb staut es sich.',
   'ev.grapefruit.lesson.adult':
-    'Grapefruit hemmt CYP3A4 in der Darmwand – Simvastatin wird langsamer verstoffwechselt und kumuliert, der Spiegel (und das Muskelschaden-Risiko) steigt. Apfel, Birne und Kaffee beeinflussen CYP3A4 nicht.',
+    'Korrekt – Grapefruit. Die Interaktion betrifft nicht alle Arzneistoffe, sondern vor allem Wirkstoffe, die stark von intestinalem CYP3A4 abhängen. Simvastatin ist hier ein gutes Beispiel: Wird CYP3A4 gehemmt, steigt die Wirkstoffexposition.',
+  'ev.grapefruit.bridge.btn': 'Welche Medizin ist betroffen?',
+  'ev.grapefruit.bridge.btn.adult': 'Medikamenten-Check',
+
+  // Medikamenten-Check: grapefruit only matters for drugs on the affected route
+  'medcheck.prompt':
+    'Grapefruit blockiert eine Medikamenten-Tür im Darm. Aber nicht alles benutzt diese Tür. Was bleibt hier hängen?',
+  'medcheck.prompt.adult': 'Welche Arzneistoffe wären bei Grapefruit besonders kritisch?',
+  'medcheck.simvastatin': 'Simvastatin',
+  'medcheck.vitc': 'Vitamin C',
+  'medcheck.pflaster': 'Pflaster',
+  'medcheck.zahnpasta': 'Zahnpasta',
+  'medcheck.otherStatin': 'Pravastatin oder Rosuvastatin',
+  'medcheck.paracetamol': 'Paracetamol',
+  'medcheck.fb.simvastatin':
+    'Genau! Simvastatin benutzt diese Tür. Wenn Grapefruit sie blockiert, bleibt zu viel davon im Körper.',
+  'medcheck.fb.simvastatin.adult':
+    'Richtig. Simvastatin ist ein CYP3A4-Substrat. Wird CYP3A4 im Darm gehemmt, steigt die Exposition.',
+  'medcheck.fb.vitc':
+    'Nein – Vitamin C ist hier nicht das Problem. Nicht alles, was man schluckt, nutzt diese Medikamenten-Tür.',
+  'medcheck.fb.vitc.adult':
+    'Nein. Die Grapefruit-Interaktion betrifft nicht beliebige Stoffe, sondern bestimmte Arzneistoffe mit passendem Abbauweg.',
+  'medcheck.fb.pflaster':
+    'Nein – ein Pflaster geht gar nicht durch den Darm. Es kann hier also nicht an dieser Tür hängen bleiben.',
+  'medcheck.fb.zahnpasta': 'Nein – Zahnpasta ist kein Medikament, das hier im Körper gestaut wird.',
+  'medcheck.fb.otherStatin':
+    'Nicht hier der Haupttreffer: Diese Statine sind deutlich weniger von CYP3A4 abhängig. Deshalb ist die Grapefruit-Problematik nicht für alle Statine gleich.',
+  'medcheck.fb.paracetamol':
+    'Nein. In dieser Geschichte geht es um CYP3A4-sensitive Arzneistoffe wie Simvastatin.',
 
   // finale: fruit-identification game (which fruits interact like grapefruit?)
   'fruits.prompt': 'Bei welchen Früchten musst du aufpassen? Wähle alle aus.',
@@ -181,6 +212,7 @@ const de: Record<string, string> = {
   'fruits.prompt.adult': 'Welche dieser Früchte hemmen den Abbau (CYP3A4)? Wähle alle aus.',
   'fruits.confirm': 'Bestätigen',
   'fruits.correct': 'Perfekt – alle richtig erkannt!',
+  'fruits.close': 'Fast – nur eine Frucht daneben.',
   'fruits.wrong': 'Nicht ganz – schau dir die Auflösung an.',
   'fruits.badge': 'Wechselwirkung',
   'fruits.credit': 'Fotos: Wikimedia Commons',
@@ -211,18 +243,43 @@ const de: Record<string, string> = {
   'out.under.sub.adult':
     'Schwankende Grapefruit-Menge → schwankende Hemmung → mit gesenkter Dosis fällt der Spiegel unter das Fenster. Cholesterin bleibt unkontrolliert. Deshalb: Grapefruit weglassen.',
   'out.stars': '{n} von 3 Sternen',
+  // rank TITLE shown next to the stars (Apotheken-Karriere). Plain = kid register;
+  // .adult = a real pharmacy-career ladder (PTA → Apotheker:in → klinisch).
+  'out.rankLabel': 'Dein Rang',
+  'rank.0': 'Noch in Ausbildung',
+  'rank.0.adult': 'In Einarbeitung',
+  'rank.10': 'Apotheken-Azubi',
+  'rank.10.adult': 'Pharmazie-Azubi',
+  'rank.15': 'Rezept-Profi',
+  'rank.15.adult': 'PTA (Assistenz)',
+  'rank.20': 'Dosis-Detektiv',
+  'rank.20.adult': 'Apotheker:in',
+  'rank.25': 'Interaktions-Profi',
+  'rank.25.adult': 'Fachapotheker:in',
+  'rank.30': 'SafePolyMed-Meister',
+  'rank.30.adult': 'Klinische:r Pharmazeut:in',
   'out.dyk': 'Wusstest du?',
+  // lesson 1: grapefruit slows the breakdown
   'out.dyk.text':
-    'Grapefruitsaft kann den Abbau vieler Medikamente bremsen – eine echte Nahrungs-Wechselwirkung.',
+    'Grapefruit bremst den Abbau – dann kann von manchen Medikamenten zu viel im Körper bleiben.',
   'out.dyk.text.young':
-    'Grapefruit kann den Abbau von Medikamenten ausbremsen. Nicht jedes Essen verträgt sich mit jeder Tablette!',
+    'Grapefruit bremst den Abbau – dann kann von manchen Medikamenten zu viel im Körper bleiben.',
   'out.dyk.text.adult':
-    'Grapefruit hemmt CYP3A4 über Furanocumarine (Bergamottin, 6′,7′-Dihydroxybergamottin) und kann den Spiegel vieler Medikamente erhöhen – der Effekt hält tagelang an.',
+    'Grapefruit hemmt intestinales CYP3A4 → Simvastatin-Exposition steigt → Risiko für Muskelschäden.',
+  // lesson 2: not every fruit (fruit specificity)
   'out.dyk2.text':
-    'Und: Grapefruit ist nicht bei jedem Medikament ein Problem – nur bei bestimmten (CYP3A4).',
-  'out.dyk2.text.young': 'Und: Grapefruit stört nicht jedes Medikament – nur manche!',
+    'Nicht jede Frucht macht das: Grapefruit, Pomelo und Bitterorange sind tricky; Orange, Mandarine und Zitrone nicht.',
+  'out.dyk2.text.young':
+    'Nicht jede Frucht macht das: Grapefruit, Pomelo und Bitterorange sind tricky; Orange, Mandarine und Zitrone nicht.',
   'out.dyk2.text.adult':
-    'Und: Grapefruit beeinflusst nur bestimmte Wirkstoffe (CYP3A4-Substrate), längst nicht alle.',
+    'Nicht jede Zitrusfrucht ist relevant: Grapefruit, Pomelo und Bitterorange enthalten problematische Furanocumarine; Süßorange, Mandarine und Zitrone praktisch nicht.',
+  // lesson 3: not every drug (drug specificity) — the new med-check takeaway
+  'out.dyk3.text':
+    'Und nicht jedes Medikament ist betroffen. Es kommt darauf an, welchen Weg das Medikament im Körper nimmt.',
+  'out.dyk3.text.young':
+    'Und nicht jedes Medikament ist betroffen. Es kommt darauf an, welchen Weg das Medikament im Körper nimmt.',
+  'out.dyk3.text.adult':
+    'Nicht jeder Arzneistoff ist betroffen: Entscheidend ist, ob der Wirkstoff ein relevantes CYP3A4-Substrat ist und wie stark die orale Exposition von diesem Abbauweg abhängt.',
 
   // ===== Story „Der Funken-Plan" (DDI · Clarithromycin × Phenprocoumon) =====
   'ddi.new': 'NEU',

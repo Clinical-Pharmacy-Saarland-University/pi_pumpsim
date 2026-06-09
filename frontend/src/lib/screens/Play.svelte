@@ -5,6 +5,7 @@
     giveDose,
     toEventReveal,
     mechanismNext,
+    medCheckDone,
     choose,
     afterDecision,
     variabilityNext,
@@ -55,9 +56,15 @@
           {:else if game.phase === 'planCheck'}
             <PlanCheck />
           {:else if game.phase === 'mechanism'}
-            <div class="emoji">💡</div>
+            <!-- bridge: "Grapefruit gefunden" → it only matters for drugs on this route -->
+            <div class="emoji">🍊</div>
+            {#if ev.bridgeTitleKey}<h2>{t(ev.bridgeTitleKey)}</h2>{/if}
             <p class="lead">{t(ev.mechanismLessonKey)}</p>
-            <button class="btn primary big" onclick={mechanismNext}>{t('common.next')}</button>
+            <button class="btn primary big" onclick={mechanismNext}>
+              {t(ev.bridgeButtonKey ?? 'common.next')}
+            </button>
+          {:else if game.phase === 'medcheck'}
+            <PlanCheck data={ev.medCheck} onDone={medCheckDone} />
           {:else if game.phase === 'decision'}
             <h2>{t(ev.decisionPromptKey)}</h2>
             <div class="opts">
