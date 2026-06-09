@@ -56,7 +56,9 @@
 
 <div class="device">
   {#if framed}<div class="label">Raspberry Pi · Touch Display 2 · 1280 × 720</div>{/if}
-  <div class="pi" class:framed {dir} style="transform: scale({scale})">
+  <!-- no transform at 1:1 (Pi): a scaled/transformed container can offset touch
+       hit-testing; only scale in the dev frame where scale < 1 -->
+  <div class="pi" class:framed {dir} style={scale === 1 ? '' : `transform: scale(${scale})`}>
     {#if showAdmin}
       <!-- render admin INSTEAD of the screen so the animated Backdrop underneath
            stops (it's a big GPU drain on the Pi → draggy scroll / laggy taps) -->
