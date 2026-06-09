@@ -14,6 +14,9 @@ export interface Calibration {
   deadband_out: number | null
   rate_in: number | null
   rate_out: number | null
+  // optional: the wizard doesn't measure it, so it must stay absent from wizard
+  // saves (backend merges exclude_unset) — set from the admin panel instead
+  torso_volume_ml?: number | null
   dead_space_ml: number | null
   empty_overpump_s: number | null // seconds to overpump OUT to guarantee empty
   prime_in_ml: number | null // ml to pump IN after empty for a calibrated start level

@@ -1,8 +1,9 @@
 {
   "deadband_in": null,
   "deadband_out": null,
-  "rate_in": null,
-  "rate_out": null,
+  "rate_in": 40.0,
+  "rate_out": 40.0,
+  "torso_volume_ml": 1800.0,
   "dead_space_ml": null,
   "empty_overpump_s": null,
   "prime_in_ml": null,

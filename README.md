@@ -55,8 +55,9 @@ just test      # backend pytest
 just check     # svelte-check (frontend type-check)
 just build     # production UI bundle
 ```
-`PUMP_BACKEND=mock` (the default) means the torso is simulated on-screen by a corner
-**MiniBar** — the whole game runs without hardware.
+`PUMP_BACKEND=mock` (the default) means the torso is simulated on-screen: a **VirtualTorso**
+panel beside the 1280×720 dev frame shows the physical twin in ml (ruler, taped band, live
+flow) — the whole game runs without hardware.
 
 ## How it plays
 `Start (language + age) → StorySelect (6 cards) → Briefing → Dose → [Event → Wissensfrage

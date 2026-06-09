@@ -52,7 +52,6 @@ export const api = {
     run: (dir: Dir, speed: number, seconds: number) =>
       post('/api/admin/run', { dir, speed, seconds }),
     stop: () => post('/api/admin/stop'),
-    rate: (rate_ml_s: number) => post('/api/admin/rate', { rate_ml_s }),
     reset: () => post('/api/admin/reset'),
     getCalibration: async () => {
       const r = await fetch('/api/admin/calibration')

@@ -18,9 +18,10 @@
   let speed = $state(60) // 0..100 (%)
   let held = $state<Dir | null>(null)
 
-  // empty/reset params (loaded from calibration on mount)
+  // empty/reset params + torso volume (loaded from calibration on mount)
   let emptyS = $state(0)
   let primeMl = $state(0)
+  let volumeMl = $state(0)
 
   let cap = $derived(game.level?.capacity ?? 100)
   let isReal = $derived(game.level?.backend === 'real')
@@ -33,6 +34,7 @@
       .then((c) => {
         emptyS = c.empty_overpump_s ?? 0
         primeMl = c.prime_in_ml ?? 0
+        volumeMl = c.torso_volume_ml ?? 0
       })
       .catch(() => {})
     return () => {
@@ -58,10 +60,22 @@
     held = null
     api.admin.reset().catch(() => {})
   }
-  const saveResetParams = () =>
-    api.admin
-      .saveCalibration({ empty_overpump_s: emptyS || null, prime_in_ml: primeMl || null })
-      .catch(() => {})
+  const saveResetParams = async () => {
+    try {
+      await api.admin.saveCalibration({
+        empty_overpump_s: emptyS || null,
+        prime_in_ml: primeMl || null,
+        // 0 must not write null (the volume has a real committed default, 1.8 L);
+        // omit the key so the stored value stays untouched
+        ...(volumeMl > 0 ? { torso_volume_ml: volumeMl } : {}),
+      })
+      // re-sync with what was actually stored (e.g. volume left at 0 -> show stored)
+      const c = await api.admin.getCalibration()
+      emptyS = c.empty_overpump_s ?? 0
+      primeMl = c.prime_in_ml ?? 0
+      volumeMl = c.torso_volume_ml ?? 0
+    } catch {}
+  }
   const doEmpty = () => api.admin.empty(emptyS || undefined).catch(() => {})
   const doCalibReset = () => api.admin.calibratedReset().catch(() => {})
 
@@ -129,7 +143,12 @@
 
       <div class="readout">
         <div class="bhead">{t('admin.state')}</div>
-        <div>Level: <b>{game.level ? Math.round(game.level.level) : '–'}</b> / {cap}</div>
+        <div>
+          Level: <b>{game.level ? Math.round(game.level.level) : '–'}</b> / {cap}
+          {#if game.level}
+            · <b>{Math.round(game.level.level_ml ?? 0)}</b> / {Math.round(game.level.torso_volume_ml ?? 0)} ml
+          {/if}
+        </div>
         <div>Zone: <b>{game.level?.zone ?? '–'}</b></div>
         <div>
           {t('admin.dir')}: <b>{game.level?.pump_direction ?? '–'}</b> · {pct(game.level?.pump_speed)}%
@@ -149,6 +168,9 @@
           </button>
           <button class="numbtn" onclick={() => openPad(t('admin.primeMl'), 'ml', (v) => (primeMl = v))}>
             <span>{t('admin.primeMl')}</span><b>{primeMl}</b>
+          </button>
+          <button class="numbtn" onclick={() => openPad(t('admin.volumeMl'), 'ml', (v) => (volumeMl = v))}>
+            <span>{t('admin.volumeMl')}</span><b>{volumeMl}</b>
           </button>
         </div>
         <button class="msave" onclick={saveResetParams}>{t('admin.saveParams')}</button>

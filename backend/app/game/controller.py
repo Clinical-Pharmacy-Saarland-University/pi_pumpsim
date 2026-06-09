@@ -54,13 +54,18 @@ class LevelController:
             self.level += step if d > 0 else -step
         self.level = _clamp(self.level, 0.0, self.cfg.capacity)
 
-    def manual_step(self, direction: str, speed: float, dt: float) -> None:
+    def manual_step(
+        self, direction: str, speed: float, dt: float, rate: float | None = None
+    ) -> None:
         """Move the level with a manually-jogged pump (admin calibration).
 
         There is no real level sensor, so this just gives visual feedback on the
-        MiniBar. `target` is kept pinned to `level` so auto mode won't snap on exit.
+        virtual torso. `rate` (units/s at 100% duty) overrides the controller rate —
+        the runner derives it from the calibrated flow / torso volume so the on-screen
+        twin moves like the real water. `target` is kept pinned to `level` so auto
+        mode won't snap on exit.
         """
-        step = self.rate * max(0.0, min(1.0, speed)) * dt
+        step = (rate if rate is not None else self.rate) * max(0.0, min(1.0, speed)) * dt
         if direction == "in":
             self.level = _clamp(self.level + step, 0.0, self.cfg.capacity)
         elif direction == "out":

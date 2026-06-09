@@ -28,12 +28,13 @@ async def lifespan(app: FastAPI):
     global runner
     pump = create_pump(settings)
     runner = LevelRunner(
-        pump, settings.tick_hz, backend=settings.pump_backend, version=APP_VERSION
+        pump,
+        settings.tick_hz,
+        backend=settings.pump_backend,
+        version=APP_VERSION,
+        calibration=load_calibration(),
     )
     await runner.start()
-    calib = load_calibration()
-    if calib.get("rate_in"):
-        runner.set_rate(calib["rate_in"])  # apply stored calibration
     print(f"[pumpsim] torso-twin up  |  v{APP_VERSION}  |  PUMP_BACKEND={settings.pump_backend}")
     try:
         yield
@@ -70,10 +71,6 @@ class ManualRequest(BaseModel):
     on: bool
 
 
-class RateRequest(BaseModel):
-    rate_ml_s: float = Field(gt=0)
-
-
 class CalibSample(BaseModel):
     dir: str = Field(pattern="^(in|out)$")
     duty: float = Field(ge=0, le=1)
@@ -85,6 +82,7 @@ class CalibrationModel(BaseModel):
     deadband_out: float | None = Field(default=None, ge=0, le=1)
     rate_in: float | None = Field(default=None, ge=0)
     rate_out: float | None = Field(default=None, ge=0)
+    torso_volume_ml: float | None = Field(default=None, gt=0)
     dead_space_ml: float | None = Field(default=None, ge=0)
     empty_overpump_s: float | None = Field(default=None, gt=0, le=600)
     prime_in_ml: float | None = Field(default=None, ge=0)
@@ -137,12 +135,6 @@ def admin_stop() -> dict:
     return {"ok": True}
 
 
-@app.post("/api/admin/rate")
-def admin_rate(req: RateRequest) -> dict:
-    _runner().set_rate(req.rate_ml_s)
-    return {"ok": True}
-
-
 @app.post("/api/admin/reset")
 def admin_reset() -> dict:
     _runner().reset()
@@ -161,8 +153,7 @@ def post_calibration(c: CalibrationModel) -> dict:
     data = load_calibration()
     data.update(c.model_dump(exclude_unset=True))
     save_calibration(data)
-    if data.get("rate_in"):
-        _runner().set_rate(data["rate_in"])  # apply the fill rate live
+    _runner().apply_calibration(data)  # rates + torso volume take effect live
     return {"ok": True}
 
 

@@ -11,12 +11,18 @@ from __future__ import annotations
 import asyncio
 
 from ..hardware.pump import Pump
+from .calibration import DEFAULT as CAL_DEFAULT
 from .controller import LevelController
 
 
 class LevelRunner:
     def __init__(
-        self, pump: Pump, tick_hz: int, backend: str = "mock", version: str = "0.0.0"
+        self,
+        pump: Pump,
+        tick_hz: int,
+        backend: str = "mock",
+        version: str = "0.0.0",
+        calibration: dict | None = None,
     ) -> None:
         self.pump = pump
         self.backend = backend
@@ -24,10 +30,16 @@ class LevelRunner:
         self.ctrl = LevelController()
         self.dt = 1.0 / max(1, tick_hz)
         self.manual = False
+        # physical mapping (from calibration): level 0..100 <-> 0..volume_ml of water
+        self.volume_ml: float = float(CAL_DEFAULT["torso_volume_ml"])
+        self.rate_in_ml_s: float | None = None   # ml/s at 100% duty, fill
+        self.rate_out_ml_s: float | None = None  # ml/s at 100% duty, drain
         self._manual_remaining: float | None = None  # seconds left on the current step
         self._seq: list[dict] = []  # queued timed steps (empty / calibrated reset)
         self._listeners: set[asyncio.Queue] = set()
         self._task: asyncio.Task | None = None
+        if calibration:
+            self.apply_calibration(calibration)
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._loop())
@@ -99,32 +111,66 @@ class LevelRunner:
             self._manual_remaining = None
             self.pump.drive("stop")
 
-    def set_rate(self, rate_ml_s: float) -> None:
-        self.pump.set_rate(rate_ml_s)
+    # --- calibration ---------------------------------------------------------
+    def apply_calibration(self, cal: dict) -> None:
+        """Adopt the persisted calibration: per-direction flow + torso volume.
+
+        Explicit null/0 falls back to the committed defaults, so a cleared value
+        behaves the same live as after a restart. rate_in is also pushed to the
+        pump so its flow telemetry is calibrated.
+        """
+        rate_in = cal.get("rate_in") or CAL_DEFAULT["rate_in"]
+        rate_out = cal.get("rate_out") or CAL_DEFAULT["rate_out"]
+        self.rate_in_ml_s = float(rate_in) if rate_in else None
+        self.rate_out_ml_s = float(rate_out) if rate_out else None
+        self.volume_ml = float(cal.get("torso_volume_ml") or CAL_DEFAULT["torso_volume_ml"])
+        if self.rate_in_ml_s:
+            self.pump.set_rate(self.rate_in_ml_s)
+
+    def _dir_rate_ml_s(self, direction: str) -> float | None:
+        """Calibrated full-duty flow for a direction (drain is often slower)."""
+        return self.rate_out_ml_s if direction == "out" else self.rate_in_ml_s
 
     # --- loop -------------------------------------------------------------
+    def _tick(self) -> None:
+        """One simulation step (sync, so tests can drive it without the loop)."""
+        # keep the pump's telemetry rate in sync with the calibrated per-direction flow
+        rate_ml = self._dir_rate_ml_s(self.pump.direction)
+        if rate_ml and rate_ml != self.pump.rate_ml_s:
+            self.pump.set_rate(rate_ml)
+        if self.manual:
+            if self._manual_remaining is not None:
+                self._manual_remaining -= self.dt
+                if self._manual_remaining <= 0:
+                    if self._seq:
+                        self._advance_seq()  # next step in the sequence
+                    else:
+                        self._manual_remaining = None
+                        self.pump.drive("stop")
+            # physically-accurate twin feedback: calibrated ml/s over the torso volume
+            rate_units = (
+                rate_ml / self.volume_ml * 100.0 if rate_ml and self.volume_ml > 0 else None
+            )
+            self.ctrl.manual_step(self.pump.direction, self.pump.speed, self.dt, rate_units)
+        else:
+            self.ctrl.tick(self.dt)
+            direction = self.ctrl.direction
+            self.pump.drive(direction, 1.0 if direction != "stop" else 0.0)
+
     async def _loop(self) -> None:
         while True:
-            if self.manual:
-                if self._manual_remaining is not None:
-                    self._manual_remaining -= self.dt
-                    if self._manual_remaining <= 0:
-                        if self._seq:
-                            self._advance_seq()  # next step in the sequence
-                        else:
-                            self._manual_remaining = None
-                            self.pump.drive("stop")
-                self.ctrl.manual_step(self.pump.direction, self.pump.speed, self.dt)
-            else:
-                self.ctrl.tick(self.dt)
-                direction = self.ctrl.direction
-                self.pump.drive(direction, 1.0 if direction != "stop" else 0.0)
+            self._tick()
             self._broadcast()
             await asyncio.sleep(self.dt)
 
     # --- telemetry --------------------------------------------------------
     def snapshot(self) -> dict:
         snap = self.ctrl.snapshot()
+        # physical mapping for the virtual torso (level% -> ml of water)
+        cap = self.ctrl.cfg.capacity or 100.0
+        snap["torso_volume_ml"] = round(self.volume_ml, 1)
+        snap["level_ml"] = round(self.ctrl.level / cap * self.volume_ml, 1)
+        snap["target_ml"] = round(self.ctrl.target / cap * self.volume_ml, 1)
         snap["pump_running"] = self.pump.is_running
         snap["pump_direction"] = self.pump.direction
         snap["pump_speed"] = round(self.pump.speed, 3)

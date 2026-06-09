@@ -78,7 +78,10 @@ with **no code change** (just an env var):
   also opens it.)
 - **Device frame**: in the browser the game renders in an exact **1280×720 box** (the Pi
   screen), scaled to fit; on the real Pi it fills the screen with no bezel.
-- The physical torso is mocked on-screen by a small **MiniBar** in the corner.
+- **Virtual torso (dev)**: beside the dev frame a **VirtualTorso** panel shows the physical
+  twin in **ml** (ml ruler, band, target marker, live flow), using the calibrated
+  `torso_volume_ml` (default **1.8 L**) + pump rates (default **40 ml/s @100 %**) — watch
+  the pump fill/drain on a PC without hardware. Not rendered on the Pi (exact 1280×720).
 
 ## Repo layout
 
@@ -89,12 +92,12 @@ backend/                    Python 3.13, FastAPI + uvicorn
   app/config.py             Settings from .env (PUMP_BACKEND, tick_hz, IBT-2 pins, pump rate…)
   app/game/controller.py    LevelController — the torso twin (level→target, band, zones) ★pure, tested
   app/game/runner.py        async loop: tick controller, drive pump; manual mode + pump sequences
-  app/game/calibration.py   load/persist calibration.json (deadband, rates, reset params)
+  app/game/calibration.py   load/persist calibration.json (deadband, rates, torso volume, reset params)
   app/hardware/             Pump HAL: pump.py (iface) · mock_pump.py · real_pump.py (IBT-2 hw-PWM) · factory.py
   calibration.default.json  committed baseline (per-machine override = calibration.json, gitignored)
   tests/                    pytest (controller · mock pump · runner/sequence · calibration)
 frontend/                   Vite + Svelte 5 (runes) + TS
-  src/App.svelte            device frame + screen router + MiniBar; routes to Admin
+  src/App.svelte            device frame + screen router + dev VirtualTorso panel; routes to Admin
   src/lib/game.svelte.ts    THE game store (flow, scoring, target=base×factors)  ★
   src/lib/locale.svelte.ts  i18n: t() with German fallback; all UI strings  ★ (edit copy here)
   src/lib/events.ts         event pool (grapefruit, apfel) + dose levels
@@ -102,7 +105,7 @@ frontend/                   Vite + Svelte 5 (runes) + TS
   src/lib/api.ts            WS connect + setTarget/reset + admin/* (pump, calibration)
   src/lib/calib.ts          pure calibration math + types (tested via sim/calib.sim.ts)
   src/lib/NumPad.svelte     on-screen numeric keypad (the kiosk has no OS keyboard)
-  src/lib/MiniBar.svelte    small on-screen mock of the physical torso (corner bar)
+  src/lib/VirtualTorso.svelte  dev-only ml twin of the physical torso (outside the Pi frame)
   src/lib/screens/          Start, StorySelect, Briefing, Play, {Ddi,Organ,Gene,Woche,Jk}Play,
                             Outcome, Resetting, Admin, CalibWizard
 deploy/                     Pi kiosk: install.sh (+ pwm overlay/udev), update.sh, systemd units, sway config

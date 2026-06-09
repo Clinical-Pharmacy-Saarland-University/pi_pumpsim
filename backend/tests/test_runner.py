@@ -44,12 +44,6 @@ def test_snapshot_reports_version():
     assert r.snapshot()["version"] == "9.9.9-test"
 
 
-def test_set_rate_updates_calibration():
-    r = _runner(rate=2.0)
-    r.set_rate(3.5)
-    assert r.snapshot()["pump_rate_ml_s"] == 3.5
-
-
 def test_run_sequence_drives_then_advances():
     r = _runner()
     r.run_sequence(
@@ -82,3 +76,45 @@ def test_controller_manual_step_moves_level_and_pins_target():
     assert c.target == c.level
     c.manual_step("out", 0.5, 1.0)  # -2.0
     assert c.level == start + 2.0
+
+
+def test_controller_manual_step_rate_override():
+    c = LevelController()
+    start = c.level
+    c.manual_step("in", 0.5, 1.0, rate=2.0)  # 2.0 units/s × 50% duty × 1 s
+    assert c.level == start + 1.0
+
+
+CAL = {"rate_in": 40.0, "rate_out": 20.0, "torso_volume_ml": 2000.0}
+
+
+def test_apply_calibration_sets_volume_and_pump_rate():
+    r = _runner(rate=2.0)
+    r.apply_calibration(CAL)
+    assert r.volume_ml == 2000.0
+    snap = r.snapshot()
+    assert snap["torso_volume_ml"] == 2000.0
+    assert snap["pump_rate_ml_s"] == 40.0  # rate_in pushed to the pump
+    assert snap["level_ml"] == round(snap["level"] / 100 * 2000.0, 1)
+
+
+def test_manual_tick_moves_level_at_calibrated_physical_rate():
+    # 40 ml/s into 2000 ml = 2 units/s at 100% duty; one 50 ms tick = 0.1 units
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="mock", calibration=CAL)
+    start = r.ctrl.level
+    r.manual_drive("in", 1.0)
+    r._tick()
+    assert abs(r.ctrl.level - (start + 0.1)) < 1e-9
+    # OUT uses the (slower) drain rate: 20 ml/s = 1 unit/s -> 0.05 units per tick
+    r.manual_drive("out", 1.0)
+    r._tick()
+    assert abs(r.ctrl.level - (start + 0.1 - 0.05)) < 1e-9
+    assert r.snapshot()["pump_rate_ml_s"] == 20.0  # telemetry follows the direction
+
+
+def test_manual_tick_without_rates_falls_back_to_controller_rate():
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="mock")
+    start = r.ctrl.level
+    r.manual_drive("in", 1.0)
+    r._tick()  # ctrl rate 4.0 units/s -> 0.2 units per 50 ms tick
+    assert abs(r.ctrl.level - (start + 0.2)) < 1e-9

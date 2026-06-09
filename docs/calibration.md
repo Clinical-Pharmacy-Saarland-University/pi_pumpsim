@@ -5,7 +5,7 @@ How to characterise the real peristaltic pump + torso so the game's on-screen le
 
 You drive everything from the **on-screen admin panel** (no SSH): on the Start screen,
 **triple-tap the SafePolyMed logo**. The panel has a speed slider, hold-to-pump IN/OUT,
-timed auto-stop runs (15/30/60 s), a **flow-measurement helper**, and live telemetry.
+timed auto-stop runs (15/30/60 s), the **guided calibration wizard**, and live telemetry.
 
 > Reference levels (from `backend/app/game/controller.py`): capacity `100`, baseline `42`,
 > therapeutic band `55–70` (the taped band), critical lines `35` (low) / `80` (high).
@@ -41,9 +41,9 @@ The manual steps below are the underlying procedure — use them by hand or to c
 | symbol | meaning | where it goes |
 |---|---|---|
 | `deadband_in` / `deadband_out` | lowest duty % at which the pump actually moves liquid | future model-follower min-duty; record here for now |
-| `rate_in` / `rate_out` | flow in ml/s at 100 % duty, fill vs drain (drain is often slower) | `PUMP_RATE_ML_S` in `backend/.env` (use `rate_in`); record both |
-| `capacity_ml` | ml from "empty" (level 0) to "full" (level 100) | torso mapping + game-feel tuning |
-| `ml_per_unit` | ml per one level-unit = `capacity_ml / 100` | converts ml ↔ level |
+| `rate_in` / `rate_out` | flow in ml/s at 100 % duty, fill vs drain (drain is often slower) | `calibration.json` (wizard saves both; `rate_in` applied to the pump live) |
+| `torso_volume_ml` | ml from "empty" (level 0) to "full" (level 100) | `calibration.json` (admin → Entleeren/Reset → „Torso-Volumen"); drives the ml mapping + the dev **virtual torso** |
+| `ml_per_unit` | ml per one level-unit = `torso_volume_ml / 100` | converts ml ↔ level |
 | `t_reset` | seconds for a full drain (reset between runs) | tune the "Patient wird vorbereitet…" screen |
 
 ---
@@ -72,7 +72,7 @@ stalls/hums). Find it by sight/feel, not by waiting for water:
 Use a scale (1 g ≈ 1 ml), pumping into a container:
 1. Container on the scale, tare it. Speed = **100 %**.
 2. Press a timed run — **keep it short (5–10 s)**; at full speed the torso empties fast.
-3. Weigh the delivered water (g ≈ ml). In the **Durchfluss** helper, enter **Volumen** + **Dauer** → **ml/s**.
+3. Weigh the delivered water (g ≈ ml). In the wizard's **Durchfluss** step, enter the weighed amount → **ml/s**.
 4. Repeat **3×** and average.
 5. Record `rate_in` (the guided wizard stores it automatically; `rate_in` is applied to the pump live).
 
@@ -81,13 +81,20 @@ Use a scale (1 g ≈ 1 ml), pumping into a container:
 2. Weigh → g ≈ ml → ml/s. Repeat 3×, average → `rate_out`.
 3. Record it (drain is usually slower; direction-specific rates land in the model-follower later).
 
-## 5. Torso volume mapping (level 0 ↔ 100)
+## 5. Torso volume mapping (level 0 ↔ 100) — `torso_volume_ml`
 Goal: the **taped band** must sit where the game thinks `55–70` is.
 1. Decide physical **empty = level 0** and **full = level 100** (e.g. a safe max fill line).
 2. From empty, pump IN and note the **ml to reach the lower tape** (= level 55) and **ml across the band**
    (lower→upper tape = 55→70). From "across the band = 15 units":  `ml_per_unit ≈ (band ml) / 15`.
-3. `capacity_ml ≈ ml_per_unit × 100`. Sanity-check against the torso's nominal volume (~2–3 L).
+3. `torso_volume_ml ≈ ml_per_unit × 100`. Sanity-check against the torso's nominal volume (~2–3 L).
 4. If the band ends up in the wrong place, re-tape so the lower tape sits at `ml_per_unit × 55` from empty.
+5. Enter the result in **admin → Entleeren / Reset → „Torso-Volumen (ml)" → Werte speichern**.
+   It persists to `calibration.json`, feeds the ml read-outs (admin + dev virtual torso) and,
+   later, the model-follower's ml↔level conversion.
+
+> Until measured, the committed defaults assume **40 ml/s @ 100 %** (both directions) and a
+> **1 800 ml** torso (`backend/calibration.default.json`) so the mock/virtual torso is
+> physically plausible out of the box.
 
 ## 5b. Tube dead-space (optional — for later)
 With a peristaltic pump the **tubing** holds liquid that never reaches the torso. Two numbers matter
@@ -123,8 +130,9 @@ The game's between-runs reset will call „Kalibrierter Reset" on real hardware 
 ## 7. Where the numbers land
 | value | file / field |
 |---|---|
-| `rate_in` (→ `PUMP_RATE_ML_S`) | `backend/.env` (live: admin „Rate speichern") |
-| `deadband_in/out`, `rate_out`, `capacity_ml`, `ml_per_unit` | **record in the results table below** (used by the upcoming model-follower) |
+| `rate_in` / `rate_out` | `backend/calibration.json` (wizard; applied live on save + on boot) |
+| `torso_volume_ml` | `backend/calibration.json` (admin → Entleeren/Reset → „Torso-Volumen") |
+| `deadband_in/out`, `ml_per_unit` | **record in the results table below** (used by the upcoming model-follower) |
 | on-screen drift / dose pace | `backend/app/game/controller.py` (`LevelConfig.rate`), `frontend/src/lib/events.ts` |
 | reset drain time | the „Patient wird vorbereitet…" (Resetting) screen |
 
@@ -150,9 +158,9 @@ The game's between-runs reset will call „Kalibrierter Reset" on real hardware 
 - **Open:** triple-tap the logo (Start screen). **Close:** ✕ or `Esc`.
 - **Jog:** hold **IN**/**OUT**; the **speed slider** adjusts live while held; **STOP** halts.
 - **Timed:** IN/OUT 15/30/60 s buttons auto-stop — use these for flow measurement.
-- **Durchfluss helper:** enter measured **Volumen (ml)** + **Dauer (s)** → **ml/s**; „Als Rate speichern" pushes it live.
-- **Telemetry:** live level, zone, pump direction/speed, flow, MOCK/REAL badge.
+- **Wizard:** „Geführte Kalibrierung starten" measures deadbands + duty→flow samples and saves them.
+- **Telemetry:** live level (incl. **ml**), zone, pump direction/speed, flow, MOCK/REAL badge.
 
-> Note: the backend currently stores a single `PUMP_RATE_ML_S`. Direction-specific
-> rates (`rate_in` vs `rate_out`) and per-duty flow curves are a planned addition for the
-> level→pump model-follower; record both now so that work has real numbers.
+> Note: the calibration stores direction-specific rates (`rate_in` / `rate_out`); the level
+> twin and telemetry already use them per direction. Per-duty flow curves (the `samples`)
+> feed the upcoming level→pump model-follower.

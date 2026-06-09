@@ -20,10 +20,13 @@ def test_round_trip(tmp_path):
 def test_missing_file_returns_defaults(tmp_path):
     loaded = load_calibration(tmp_path / "nope.json")
     assert loaded == DEFAULT
+    # sensible physical assumptions even with no calibration at all
+    assert loaded["rate_in"] == 40.0
+    assert loaded["torso_volume_ml"] == 1800.0
     # returned object is a copy — mutating it must not corrupt the module default
     loaded["rate_in"] = 5.0
     loaded["samples"].append({"x": 1})
-    assert DEFAULT["rate_in"] is None
+    assert DEFAULT["rate_in"] == 40.0
     assert DEFAULT["samples"] == []
 
 
@@ -33,7 +36,15 @@ def test_partial_file_filled_with_defaults(tmp_path):
     loaded = load_calibration(p)
     assert loaded["rate_in"] == 7.0
     assert loaded["deadband_in"] is None
+    assert loaded["torso_volume_ml"] == 1800.0  # older files gain the new field
     assert loaded["samples"] == []
+
+
+def test_torso_volume_round_trip(tmp_path):
+    p = tmp_path / "c.json"
+    save_calibration({"torso_volume_ml": 2200.0}, p)
+    loaded = load_calibration(p)
+    assert loaded["torso_volume_ml"] == 2200.0
 
 
 def test_corrupt_file_returns_defaults(tmp_path):

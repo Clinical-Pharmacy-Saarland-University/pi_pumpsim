@@ -14,6 +14,10 @@ export interface LevelState {
   band_high: number
   critical_high: number
   critical_low: number
+  // physical mapping for the virtual torso (from calibration)
+  torso_volume_ml: number // ml from level 0 to level 100
+  level_ml: number
+  target_ml: number
   pump_running: boolean
   // pump / admin telemetry
   pump_direction: 'in' | 'out' | 'stop'

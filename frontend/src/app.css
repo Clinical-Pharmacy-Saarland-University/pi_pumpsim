@@ -71,21 +71,36 @@ body {
 
 /* Device frame: the game renders at the EXACT Pi screen size (1280×720) and is
    scaled to fit the browser window. On the real Pi (1280×720 fullscreen) scale=1
-   and it fills the screen with the bezel off-screen. */
+   and it fills the screen with the bezel off-screen. In dev the leftover space
+   to the right holds the virtual torso (the on-screen twin of the physical tank). */
 .device {
   position: fixed;
   inset: 0;
   display: flex;
+  /* "safe": fall back to start-alignment when the dev window is too small,
+     instead of clipping both edges unreachably (body has overflow:hidden) */
+  align-items: safe center;
+  justify-content: safe center;
+  gap: 28px;
+  background: #05060c;
+}
+.stage {
+  display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 12px;
-  background: #05060c;
 }
 .device .label {
   color: var(--dim);
   font-size: 13px;
   letter-spacing: 0.5px;
+}
+/* occupies the SCALED footprint of the frame (a transform doesn't change layout
+   size), so siblings like the twin panel lay out next to it correctly */
+.fit {
+  width: 1280px;
+  height: 720px;
+  flex: none;
 }
 .pi {
   width: 1280px;
@@ -93,8 +108,14 @@ body {
   flex: none;
   position: relative;
   overflow: hidden;
-  transform-origin: center center;
+  transform-origin: top left;
   background: radial-gradient(1200px 700px at 50% -8%, var(--bg1), var(--bg0));
+}
+/* dev-only sidebar for the virtual torso, roughly matching the frame height */
+.twin-panel {
+  width: 300px;
+  flex: none;
+  height: min(calc(100vh - 48px), 720px);
 }
 /* bezel only when previewed (desktop); on a real 1280×720 Pi screen it's clean fullscreen */
 .pi.framed {
