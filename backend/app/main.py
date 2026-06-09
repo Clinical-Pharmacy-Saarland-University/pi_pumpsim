@@ -18,6 +18,7 @@ from .config import settings
 from .game.calibration import load_calibration, save_calibration
 from .game.runner import LevelRunner
 from .hardware.factory import create_pump
+from .version import APP_VERSION
 
 runner: LevelRunner | None = None
 
@@ -26,19 +27,21 @@ runner: LevelRunner | None = None
 async def lifespan(app: FastAPI):
     global runner
     pump = create_pump(settings)
-    runner = LevelRunner(pump, settings.tick_hz, backend=settings.pump_backend)
+    runner = LevelRunner(
+        pump, settings.tick_hz, backend=settings.pump_backend, version=APP_VERSION
+    )
     await runner.start()
     calib = load_calibration()
     if calib.get("rate_in"):
         runner.set_rate(calib["rate_in"])  # apply stored calibration
-    print(f"[pumpsim] torso-twin up  |  PUMP_BACKEND={settings.pump_backend}")
+    print(f"[pumpsim] torso-twin up  |  v{APP_VERSION}  |  PUMP_BACKEND={settings.pump_backend}")
     try:
         yield
     finally:
         await runner.shutdown()
 
 
-app = FastAPI(title="pi_pumpsim — SafePolyMed", lifespan=lifespan)
+app = FastAPI(title="pi_pumpsim — SafePolyMed", version=APP_VERSION, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )

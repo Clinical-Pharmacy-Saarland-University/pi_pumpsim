@@ -51,7 +51,9 @@ clean:
     Get-ChildItem backend/app, backend/tests -Recurse -Directory -Filter __pycache__ -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
     if (Test-Path backend/.pytest_cache) { Remove-Item -Recurse -Force backend/.pytest_cache }
 
-# tag a release (annotated) and push it.  usage:  just tag v0.2.0
+# set the app version + cut a release: write VERSION, commit, annotated tag, push.  usage:  just tag 0.0.1-alpha
 tag VERSION:
-    git tag -a {{VERSION}} -m "Release {{VERSION}}"
-    if (git remote | Select-String -Quiet origin) { git push origin {{VERSION}} } else { Write-Host "No 'origin' remote yet — tag {{VERSION}} created locally. After `git remote add origin <url>`:  git push origin {{VERSION}}" -ForegroundColor Yellow }
+    [IO.File]::WriteAllText((Join-Path $PWD 'VERSION'), "{{VERSION}}`n")
+    if (git status --porcelain -- VERSION) { git add VERSION; git commit -m "chore(release): v{{VERSION}}" } else { Write-Host "VERSION already v{{VERSION}} — tagging current HEAD." -ForegroundColor Cyan }
+    git tag -a v{{VERSION}} -m "Release v{{VERSION}}"
+    if (git remote | Select-String -Quiet origin) { git push origin HEAD; git push origin v{{VERSION}} } else { Write-Host "No 'origin' remote yet — committed + tagged v{{VERSION}} locally. After `git remote add origin <url>`:  git push origin HEAD; git push origin v{{VERSION}}" -ForegroundColor Yellow }

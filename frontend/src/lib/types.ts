@@ -22,4 +22,5 @@ export interface LevelState {
   pump_rate_ml_s: number // calibrated full-speed flow
   manual: boolean
   backend: string // "mock" | "real"
+  version: string // app version (from the repo-root VERSION file)
 }

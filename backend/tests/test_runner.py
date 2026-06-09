@@ -39,6 +39,11 @@ def test_set_manual_off_does_not_snap_target():
     assert r.ctrl.target == 60.0  # auto won't yank the level back to baseline
 
 
+def test_snapshot_reports_version():
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="mock", version="9.9.9-test")
+    assert r.snapshot()["version"] == "9.9.9-test"
+
+
 def test_set_rate_updates_calibration():
     r = _runner(rate=2.0)
     r.set_rate(3.5)

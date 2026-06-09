@@ -72,6 +72,7 @@
   <header>
     <h2>{t('admin.title')}</h2>
     <span class="badge" class:real={isReal}>{isReal ? 'REAL' : 'MOCK'}</span>
+    {#if game.level?.version}<span class="ver">v{game.level.version}</span>{/if}
     <div class="spacer"></div>
     {#if !isReal}<span class="note">{t('admin.mockNote')}</span>{/if}
     <button class="x" onclick={onclose} aria-label={t('admin.close')}>✕</button>
@@ -223,6 +224,17 @@
   .badge.real {
     background: var(--green, #1f9d6b);
     color: #fff;
+  }
+  .ver {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
   }
   .note {
     font-size: 12px;

@@ -15,9 +15,12 @@ from .controller import LevelController
 
 
 class LevelRunner:
-    def __init__(self, pump: Pump, tick_hz: int, backend: str = "mock") -> None:
+    def __init__(
+        self, pump: Pump, tick_hz: int, backend: str = "mock", version: str = "0.0.0"
+    ) -> None:
         self.pump = pump
         self.backend = backend
+        self.version = version
         self.ctrl = LevelController()
         self.dt = 1.0 / max(1, tick_hz)
         self.manual = False
@@ -129,6 +132,7 @@ class LevelRunner:
         snap["pump_rate_ml_s"] = round(self.pump.rate_ml_s, 3)
         snap["manual"] = self.manual
         snap["backend"] = self.backend
+        snap["version"] = self.version
         return snap
 
     def _broadcast(self) -> None:

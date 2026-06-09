@@ -123,7 +123,7 @@ just down      # kill stray dev servers (8000/5173)
 just test      # backend pytest
 just check     # svelte-check (frontend type-check)
 just build     # build the UI bundle (backend serves frontend/dist in prod)
-just tag v0.3.0  # annotated git tag + push
+just tag 0.0.1-alpha  # write VERSION, commit, annotated tag v0.0.1-alpha + push
 ```
 
 - Backend reads `backend/.env` (copy from `.env.example`). `PUMP_BACKEND=mock` for dev.
