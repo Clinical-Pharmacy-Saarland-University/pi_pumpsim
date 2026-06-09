@@ -20,7 +20,8 @@ Run on the Pi (no sudo; user is in the 'gpio' group):
     python3 ~/pi_pumpsim/tools/pump_test.py
 Then open  http://pumpsim.local:8001  from your PC. Ctrl+C stops + releases GPIO.
 Override via env: PUMP_RPWM_PIN PUMP_LPWM_PIN PUMP_REN_PIN PUMP_LEN_PIN
-                  PUMP_IN_IS_RPWM PUMP_PWM_HZ PUMP_TEST_PORT
+                  PUMP_IN_IS_RPWM PUMP_PWM_HZ PUMP_TEST_PORT PUMP_PWM_ACTIVE_HIGH
+(PUMP_PWM_ACTIVE_HIGH=0 if the board drives the motor when the PWM pin is LOW.)
 """
 from __future__ import annotations
 
@@ -45,12 +46,17 @@ try:
 except Exception as e:  # pragma: no cover - Pi-only
     raise SystemExit(f"gpiozero not available ({e}). Run this on the Pi.")
 
-_rpwm = PWMOutputDevice(RPWM_PIN, frequency=PWM_HZ)
-_lpwm = PWMOutputDevice(LPWM_PIN, frequency=PWM_HZ)
-_ren = DigitalOutputDevice(REN_PIN)
-_len = DigitalOutputDevice(LEN_PIN)
-_ren.on()  # enable both half-bridges; we steer via the PWM pins
-_len.on()
+# Some driver boards (and the Pi 5 PWM lines in this build) are ACTIVE-LOW on the PWM
+# inputs: pin LOW = motor driven. Tell-tale of the wrong polarity: the motor runs at
+# startup / on STOP and "100%" stops it. Set PUMP_PWM_ACTIVE_HIGH=0 for such a board.
+ACTIVE_HIGH = os.environ.get("PUMP_PWM_ACTIVE_HIGH", "1") == "1"
+
+_rpwm = PWMOutputDevice(RPWM_PIN, frequency=PWM_HZ, active_high=ACTIVE_HIGH, initial_value=0)
+_lpwm = PWMOutputDevice(LPWM_PIN, frequency=PWM_HZ, active_high=ACTIVE_HIGH, initial_value=0)
+# Enables start OFF and come on ONLY while actively pumping — so the motor can't run
+# before you press anything, and STOP truly cuts the bridge (not just the PWM duty).
+_ren = DigitalOutputDevice(REN_PIN, initial_value=False)
+_len = DigitalOutputDevice(LEN_PIN, initial_value=False)
 
 # map logical direction -> (forward_pwm, reverse_pwm) devices
 _in_pwm = _rpwm if IN_IS_RPWM else _lpwm
@@ -72,6 +78,8 @@ def apply(direction: str, speed: int) -> None:
         if direction == "stop" or speed == 0:
             _rpwm.value = 0.0
             _lpwm.value = 0.0
+            _ren.off()  # disable the bridge — a guaranteed stop, polarity-independent
+            _len.off()
             _state.update(direction="stop", speed=0)
             return
         if direction == "in":
@@ -82,6 +90,8 @@ def apply(direction: str, speed: int) -> None:
             _out_pwm.value = speed / 100.0
         else:
             return
+        _ren.on()  # enable the bridge only while actively driving
+        _len.on()
         _state.update(direction=direction, speed=speed)
 
 
