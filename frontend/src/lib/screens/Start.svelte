@@ -18,19 +18,18 @@
     }
   }
 
-  // Secret admin (touch): long-press (~1.2 s) the empty top-left corner.
-  let pressTimer: ReturnType<typeof setTimeout> | null = null
-  function cornerDown() {
-    pressTimer = setTimeout(() => {
-      pressTimer = null
+  // Secret admin (touch): triple-tap the SafePolyMed logo (3 quick taps).
+  let logoTaps = 0
+  let logoTimer: ReturnType<typeof setTimeout> | null = null
+  function logoTap() {
+    logoTaps += 1
+    if (logoTimer) clearTimeout(logoTimer)
+    if (logoTaps >= 3) {
+      logoTaps = 0
       onadmin()
-    }, 1200)
-  }
-  function cornerUp() {
-    if (pressTimer) {
-      clearTimeout(pressTimer)
-      pressTimer = null
+      return
     }
+    logoTimer = setTimeout(() => (logoTaps = 0), 600)
   }
 
   const AGES = [
@@ -42,20 +41,11 @@
 <div class="start">
   <Backdrop />
 
-  <!-- secret admin (touch): long-press the empty top-left corner -->
-  <button
-    class="corner"
-    onpointerdown={cornerDown}
-    onpointerup={cornerUp}
-    onpointerleave={cornerUp}
-    onpointercancel={cornerUp}
-    tabindex="-1"
-    aria-hidden="true"
-  ></button>
-
   <!-- hero ----------------------------------------------------------------- -->
   <header class="hero">
-    <div class="logo"><SpmLogo /></div>
+    <button class="logo" onpointerup={logoTap} aria-label="SafePolyMed" tabindex="-1">
+      <SpmLogo />
+    </button>
     <p class="tag">{t('app.subtitle')}</p>
   </header>
 
@@ -127,10 +117,17 @@
     animation: heroin 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) both;
   }
   .logo {
+    display: block;
     width: 580px;
     max-width: 72vw;
     aspect-ratio: 924.6 / 223.5;
     margin: 4px auto 0;
+    background: none;
+    border: none;
+    padding: 0;
+    overflow: visible;
+    cursor: pointer;
+    touch-action: manipulation;
   }
   .tag {
     margin-top: 12px;
@@ -323,20 +320,6 @@
     background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
     transform: skewX(-20deg);
     animation: sheen 3.4s ease-in-out 1.4s infinite;
-  }
-
-  /* ---- secret admin corner (invisible long-press hotspot) -------------- */
-  .corner {
-    position: absolute;
-    top: 0;
-    inset-inline-start: 0;
-    width: 64px;
-    height: 64px;
-    background: transparent;
-    border: none;
-    padding: 0;
-    z-index: 5;
-    touch-action: none;
   }
 
   /* ---- credit / secret admin ------------------------------------------- */

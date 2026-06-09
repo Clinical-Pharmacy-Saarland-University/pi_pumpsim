@@ -86,7 +86,7 @@ Next steps:
         IMPORTANT: the driver's VCC must be 3.3 V, NOT 5 V.
         Reboot once so the pwm-2chan overlay (added above) takes effect.
      Leave PUMP_BACKEND=mock to safely test the UI/admin on the screen first.
-     The on-screen admin (long-press the top-left corner) jogs the pump + calibrates.
+     The on-screen admin (triple-tap the SafePolyMed logo) jogs the pump + calibrates.
 
   2. The display + touch are rotated to landscape by sway
      (output * transform 90 in /etc/pumpsim/sway-kiosk.config).

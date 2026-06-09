@@ -59,106 +59,109 @@
   <header>
     <h2>{t('admin.title')}</h2>
     <span class="badge" class:real={isReal}>{isReal ? 'REAL' : 'MOCK'}</span>
+    <div class="spacer"></div>
+    {#if !isReal}<span class="note">{t('admin.mockNote')}</span>{/if}
     <button class="x" onclick={onclose} aria-label={t('admin.close')}>✕</button>
   </header>
 
-  {#if !isReal}<div class="note">{t('admin.mockNote')}</div>{/if}
+  <div class="grid">
+    <!-- left: manual jog -->
+    <section class="col">
+      <div class="speed">
+        <label for="sp">{t('admin.speed')}: <b>{speed}%</b></label>
+        <input id="sp" type="range" min="0" max="100" bind:value={speed} oninput={onSpeed} />
+      </div>
 
-  <!-- speed -->
-  <div class="speed">
-    <label for="sp">{t('admin.speed')}: <b>{speed}%</b></label>
-    <input id="sp" type="range" min="0" max="100" bind:value={speed} oninput={onSpeed} />
+      <div class="pump">
+        <button
+          class="in"
+          onpointerdown={() => hold('in')}
+          onpointerup={stop}
+          onpointerleave={stop}
+          onpointercancel={stop}>{t('admin.pumpIn')}</button
+        >
+        <button
+          class="out"
+          onpointerdown={() => hold('out')}
+          onpointerup={stop}
+          onpointerleave={stop}
+          onpointercancel={stop}>{t('admin.pumpOut')}</button
+        >
+      </div>
+      <div class="hint">{t('admin.hold')}</div>
+      <button class="stop" onclick={stop}>{t('admin.stop')}</button>
+
+      <div class="block">
+        <div class="bhead">{t('admin.timed')}</div>
+        <div class="timed">
+          {#each [15, 30, 60] as s}
+            <button onclick={() => timed('in', s)}>▲ {s}s</button>
+          {/each}
+        </div>
+        <div class="timed">
+          {#each [15, 30, 60] as s}
+            <button onclick={() => timed('out', s)}>▼ {s}s</button>
+          {/each}
+        </div>
+      </div>
+    </section>
+
+    <!-- right: calibration + live state -->
+    <section class="col">
+      <div class="block">
+        <div class="bhead">{t('admin.calib')}</div>
+        <label class="ratelabel" for="rate">{t('admin.rate')}</label>
+        <div class="raterow">
+          <input id="rate" type="number" min="0.01" step="0.1" bind:value={rateInput} />
+          <button onclick={setRate}>{t('admin.setRate')}</button>
+        </div>
+        <p class="deadband">{t('admin.deadbandHint')}</p>
+      </div>
+
+      <div class="readout">
+        <div class="bhead">{t('admin.state')}</div>
+        <div>Level: <b>{game.level ? Math.round(game.level.level) : '–'}</b> / {cap}</div>
+        <div>Zone: <b>{game.level?.zone ?? '–'}</b></div>
+        <div>
+          {t('admin.dir')}: <b>{game.level?.pump_direction ?? '–'}</b> · {pct(game.level?.pump_speed)}%
+        </div>
+        <div>
+          {t('admin.flow')}: <b>{game.level?.pump_flow_ml_s ?? 0}</b> ml/s (×{game.level?.pump_rate_ml_s ??
+            0})
+        </div>
+        <div>{t('admin.running')}: <b>{game.level?.pump_running ? 'AN' : 'aus'}</b></div>
+      </div>
+
+      <button class="reset" onclick={resetBaseline}>{t('admin.reset')}</button>
+    </section>
   </div>
 
-  <!-- hold to pump -->
-  <div class="pump">
-    <button
-      class="in"
-      onpointerdown={() => hold('in')}
-      onpointerup={stop}
-      onpointerleave={stop}
-      onpointercancel={stop}>{t('admin.pumpIn')}</button
-    >
-    <button
-      class="out"
-      onpointerdown={() => hold('out')}
-      onpointerup={stop}
-      onpointerleave={stop}
-      onpointercancel={stop}>{t('admin.pumpOut')}</button
-    >
-  </div>
-  <div class="hint">{t('admin.hold')}</div>
-  <button class="stop" onclick={stop}>{t('admin.stop')}</button>
-
-  <!-- timed runs (auto-stop) -->
-  <div class="block">
-    <div class="bhead">{t('admin.timed')}</div>
-    <div class="timed">
-      {#each [15, 30, 60] as s}
-        <button onclick={() => timed('in', s)}>▲ {s}s</button>
-      {/each}
-    </div>
-    <div class="timed">
-      {#each [15, 30, 60] as s}
-        <button onclick={() => timed('out', s)}>▼ {s}s</button>
-      {/each}
-    </div>
-  </div>
-
-  <!-- calibration -->
-  <div class="block">
-    <div class="bhead">{t('admin.calib')}</div>
-    <label class="ratelabel" for="rate">{t('admin.rate')}</label>
-    <div class="raterow">
-      <input id="rate" type="number" min="0.01" step="0.1" bind:value={rateInput} />
-      <button onclick={setRate}>{t('admin.setRate')}</button>
-    </div>
-    <p class="deadband">{t('admin.deadbandHint')}</p>
-  </div>
-
-  <!-- live state -->
-  <div class="readout">
-    <div class="bhead">{t('admin.state')}</div>
-    <div>Level: <b>{game.level ? Math.round(game.level.level) : '–'}</b> / {cap}</div>
-    <div>Zone: <b>{game.level?.zone ?? '–'}</b></div>
-    <div>{t('admin.dir')}: <b>{game.level?.pump_direction ?? '–'}</b> · {pct(game.level?.pump_speed)}%</div>
-    <div>{t('admin.flow')}: <b>{game.level?.pump_flow_ml_s ?? 0}</b> ml/s (×{game.level?.pump_rate_ml_s ?? 0})</div>
-    <div>{t('admin.running')}: <b>{game.level?.pump_running ? 'AN' : 'aus'}</b></div>
-  </div>
-
-  <div class="row">
-    <button onclick={resetBaseline}>{t('admin.reset')}</button>
-  </div>
-
-  <footer>
-    <kbd>A</kbd>/<kbd>Esc</kbd> schließt · Geheim-Start: Ecke oben links lang drücken
-  </footer>
+  <footer><kbd>A</kbd>/<kbd>Esc</kbd> schließt · Geheim-Start: Logo 3× tippen</footer>
 </aside>
 
 <style>
   .admin {
     position: absolute;
-    top: 0;
-    inset-inline-end: 0;
+    inset: 0;
+    width: 100%;
     height: 100%;
-    width: min(460px, 96%);
-    background: rgba(12, 16, 32, 0.97);
-    border-inline-start: 1px solid var(--border);
-    box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
-    padding: 16px 18px;
+    background: rgba(10, 14, 28, 0.98);
+    padding: 18px 24px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     z-index: 50;
     overflow-y: auto;
   }
   header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
   }
   h2 {
-    font-size: 18px;
+    font-size: 20px;
+  }
+  .spacer {
     flex: 1;
   }
   .badge {
@@ -174,38 +177,55 @@
     background: var(--green, #1f9d6b);
     color: #fff;
   }
+  .note {
+    font-size: 12px;
+    color: #ffb4ad;
+  }
   .x {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    width: 38px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
   }
-  .note {
-    background: rgba(214, 69, 59, 0.14);
-    border: 1px solid rgba(214, 69, 59, 0.4);
-    border-radius: 10px;
-    padding: 8px 10px;
-    font-size: 12px;
-    color: #ffb4ad;
+
+  /* two columns filling the screen */
+  .grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
   }
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  @media (max-width: 760px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .speed label {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--dim);
   }
   input[type='range'] {
     width: 100%;
-    height: 40px;
+    height: 48px;
   }
   .pump {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 12px;
   }
   .pump button {
-    padding: 26px 0;
-    border-radius: 14px;
-    font-size: 17px;
+    padding: 40px 0;
+    border-radius: 16px;
+    font-size: 20px;
     font-weight: 800;
     color: #fff;
     touch-action: none;
@@ -220,18 +240,18 @@
     transform: scale(0.97);
   }
   .hint {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--dim);
     text-align: center;
-    margin-top: -4px;
+    margin-top: -6px;
   }
   .stop {
     background: #d6453b;
     color: #fff;
     border: none;
-    border-radius: 12px;
-    padding: 14px;
-    font-size: 16px;
+    border-radius: 14px;
+    padding: 18px;
+    font-size: 18px;
     font-weight: 800;
   }
   .stop:active {
@@ -241,8 +261,8 @@
   .readout {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px;
+    border-radius: 14px;
+    padding: 14px 16px;
   }
   .bhead {
     font-size: 12px;
@@ -264,63 +284,59 @@
     background: #1b2440;
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 12px 0;
+    padding: 16px 0;
     font-weight: 700;
     color: #e8edff;
   }
   .ratelabel {
     display: block;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--dim);
     margin-bottom: 6px;
   }
   .raterow {
     display: flex;
-    gap: 8px;
+    gap: 10px;
   }
   .raterow input {
     flex: 1;
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 10px;
+    padding: 12px;
     color: #e8edff;
-    font-size: 16px;
+    font-size: 18px;
   }
   .raterow button {
     background: var(--spm-cyan, #00beca);
     color: #04222a;
     border: none;
     border-radius: 10px;
-    padding: 0 16px;
+    padding: 0 20px;
     font-weight: 800;
   }
   .deadband {
-    margin: 10px 0 0;
-    font-size: 12px;
+    margin: 12px 0 0;
+    font-size: 13px;
     line-height: 1.5;
     color: var(--dim);
   }
   .readout {
-    font-size: 14px;
-    line-height: 1.7;
+    font-size: 16px;
+    line-height: 1.9;
   }
-  .row {
-    display: flex;
-    gap: 8px;
-  }
-  .row button {
-    flex: 1;
+  .reset {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px;
+    border-radius: 12px;
+    padding: 14px;
     font-weight: 600;
+    color: #e8edff;
   }
   footer {
-    margin-top: auto;
     font-size: 11px;
     color: var(--dim);
+    text-align: center;
   }
   kbd {
     background: var(--surface);

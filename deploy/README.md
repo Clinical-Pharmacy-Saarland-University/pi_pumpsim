@@ -39,8 +39,8 @@ Copied from `backend/.env.example` on install. Key fields:
 | `PUMP_RATE_ML_S` | full-speed (100 % duty) flow, ml/s — set during calibration |
 
 After editing: `sudo systemctl restart pumpsim-backend`.
-(Calibration is also live-editable from the on-screen admin panel — **long-press the
-top-left corner** on the Start screen, or press `A`.)
+(Calibration is also live-editable from the on-screen admin panel — **triple-tap the
+SafePolyMed logo** on the Start screen, or press `A`.)
 
 ## ⚠️ Pump wiring — IBT-2 (BTS7960) H-bridge (don't skip)
 The pump is a reversible DC motor driven by an **IBT-2** H-bridge. The Pi provides
