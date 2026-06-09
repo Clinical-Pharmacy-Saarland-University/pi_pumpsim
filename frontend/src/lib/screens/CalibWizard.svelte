@@ -41,6 +41,7 @@
     }
   }
   const stopPump = () => api.admin.stop().catch(() => {})
+  const holdPump = (dir: Dir, speed: number) => api.admin.pump(dir, speed).catch(() => {})
 
   function cleanup() {
     clearTimer()
@@ -139,6 +140,23 @@
   {#if phase === 'intro'}
     <div class="body">
       <p class="lead">{t('cal.intro')}</p>
+      <div class="primelabel">{t('cal.prime')}</div>
+      <div class="prime">
+        <button
+          class="in"
+          onpointerdown={() => holdPump('in', 1)}
+          onpointerup={stopPump}
+          onpointerleave={stopPump}
+          onpointercancel={stopPump}>{t('admin.pumpIn')}</button
+        >
+        <button
+          class="out"
+          onpointerdown={() => holdPump('out', 1)}
+          onpointerup={stopPump}
+          onpointerleave={stopPump}
+          onpointercancel={stopPump}>{t('admin.pumpOut')}</button
+        >
+      </div>
       <button class="primary" onclick={() => (phase = 'deadbandIn')}>{t('cal.start')}</button>
     </div>
   {:else if phase === 'deadbandIn' || phase === 'deadbandOut'}
@@ -314,6 +332,29 @@
   .primary {
     background: var(--spm-cyan, #00beca);
     color: #04222a;
+  }
+  .primelabel {
+    font-size: 14px;
+    color: var(--dim);
+    text-align: center;
+  }
+  .prime {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .prime .in {
+    background: #1f9d6b;
+    color: #fff;
+    touch-action: none;
+  }
+  .prime .out {
+    background: #3b7bd6;
+    color: #fff;
+    touch-action: none;
+  }
+  .prime button:active {
+    transform: scale(0.97);
   }
   .flows {
     background: #1f9d6b;

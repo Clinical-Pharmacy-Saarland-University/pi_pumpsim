@@ -531,6 +531,7 @@ const de: Record<string, string> = {
   'cal.intro':
     'Wir messen das Totband (Mindest-Tastgrad) und den Durchfluss. Bereithalten: Waage + Behälter (1 g ≈ 1 ml).',
   'cal.start': 'Starten',
+  'cal.prime': 'Schläuche füllen — gedrückt halten',
   'cal.deadband': 'Totband',
   'cal.deadbandHelp':
     'Tastgrad einstellen, „Testen" halten, bis sich der Rotor gerade dreht – dann übernehmen.',

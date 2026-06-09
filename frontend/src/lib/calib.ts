@@ -18,12 +18,15 @@ export interface Calibration {
   samples: CalibSample[]
 }
 
-/** Flow-measurement targets the wizard walks through (duty as a 0..1 fraction). */
+/** Flow-measurement targets the wizard walks through (duty as a 0..1 fraction).
+ *  All INs first, then all OUTs (no flip-flopping the flow direction); 3 speeds each. */
 export const FLOW_TARGETS: { dir: Dir; duty: number }[] = [
   { dir: 'in', duty: 1.0 },
+  { dir: 'in', duty: 0.7 },
+  { dir: 'in', duty: 0.4 },
   { dir: 'out', duty: 1.0 },
-  { dir: 'in', duty: 0.6 },
-  { dir: 'out', duty: 0.6 },
+  { dir: 'out', duty: 0.7 },
+  { dir: 'out', duty: 0.4 },
 ]
 
 /** Assemble a Calibration; rate_in/out are taken from the 100%-duty samples. */

@@ -41,6 +41,8 @@ ok('dead_space_ml defaults to null', cal.dead_space_ml === null)
 ok('dead_space_ml passed through', buildCalibration(null, null, [], 12.5).dead_space_ml === 12.5)
 ok('rate null when no 100% sample', buildCalibration(null, null, [{ dir: 'in', duty: 0.6, ml_per_s: 4 }]).rate_in === null)
 ok('FLOW_TARGETS covers both directions at 100%', FLOW_TARGETS.some((t) => t.dir === 'in' && t.duty === 1) && FLOW_TARGETS.some((t) => t.dir === 'out' && t.duty === 1))
+ok('all INs come before all OUTs', FLOW_TARGETS.findIndex((t) => t.dir === 'out') > FLOW_TARGETS.map((t) => t.dir).lastIndexOf('in'))
+ok('three speeds per direction', FLOW_TARGETS.filter((t) => t.dir === 'in').length === 3 && FLOW_TARGETS.filter((t) => t.dir === 'out').length === 3)
 
 console.log(`\n${fails === 0 ? '✅ ALL PASS' : '❌ ' + fails + ' FAILED'}`)
 process.exit(fails === 0 ? 0 : 1)

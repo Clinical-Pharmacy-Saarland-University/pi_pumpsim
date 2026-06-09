@@ -15,10 +15,11 @@ timed auto-stop runs (15/30/60 s), a **flow-measurement helper**, and live telem
 ## Quick path — the guided wizard (recommended)
 Admin → **„Geführte Kalibrierung starten"**. It drives the pump and only asks you to read the
 scale; results save to `backend/calibration.json` (loaded on boot; `rate_in` applied live):
+0. **Prime:** on the intro, **hold IN / OUT** to fill the tubes before measuring.
 1. **Totband (IN, then OUT):** adjust the duty (−5/−1/+1/+5), **hold „Testen"** until the rotor
    *just* starts turning, then **Übernehmen** → captures `deadband_in` / `deadband_out`.
-2. **Durchfluss (IN & OUT at 100 % and 60 %):** pick **5 s or 10 s**, container on the scale,
-   **Messlauf starten** (auto-stops), then type the **weighed grams** (1 g ≈ 1 ml) → ml/s.
+2. **Durchfluss — all INs (100 % / 70 % / 40 %), then all OUTs:** pick **5 s or 10 s**, container on
+   the scale, **Messlauf starten** (auto-stops), type the **weighed grams** (1 g ≈ 1 ml) → ml/s.
    Keep runs short — at full speed the torso empties fast.
 3. **Überprüfen & Speichern:** check deadbands + rates + samples, then **Speichern**.
 
