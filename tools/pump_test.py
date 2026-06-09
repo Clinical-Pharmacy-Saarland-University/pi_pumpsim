@@ -51,7 +51,7 @@ RPWM_PIN = int(os.environ.get("PUMP_RPWM_PIN", "12"))
 LPWM_PIN = int(os.environ.get("PUMP_LPWM_PIN", "13"))
 REN_PIN = int(os.environ.get("PUMP_REN_PIN", "23"))
 LEN_PIN = int(os.environ.get("PUMP_LEN_PIN", "24"))
-IN_IS_RPWM = os.environ.get("PUMP_IN_IS_RPWM", "1") == "1"  # which pwm pin means "in"
+IN_IS_RPWM = os.environ.get("PUMP_IN_IS_RPWM", "0") == "1"  # which pwm pin means "in" (our pump: 0 = LPWM)
 PORT = int(os.environ.get("PUMP_TEST_PORT", "8001"))
 MAX_SECONDS = 120  # safety cap on timed runs
 

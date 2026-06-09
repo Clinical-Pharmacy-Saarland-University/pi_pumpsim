@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     pump_lpwm_pin: int = 13          # BCM, hardware PWM channel 1
     pump_ren_pin: int = 23           # BCM, R_EN
     pump_len_pin: int = 24           # BCM, L_EN
-    pump_in_is_rpwm: bool = True     # which PWM input means "fill / in"
+    pump_in_is_rpwm: bool = False    # our pump: IN=LPWM/GPIO13, OUT=RPWM/GPIO12 (flip to swap)
     pump_pwm_hz: int = 20000         # inaudible; RP1 hardware PWM handles it cleanly
     pump_pwm_chip: str = "auto"      # "auto" detects RP1 (trixie/6.12 = pwmchip0)
 
