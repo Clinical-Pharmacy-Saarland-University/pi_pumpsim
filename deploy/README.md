@@ -36,6 +36,13 @@ deploy/overlay.sh off && sudo reboot     # 1. make the root fs writable
 cd pi_pumpsim && deploy/update.sh        # 2. pull + rebuild
 deploy/overlay.sh on  && sudo reboot     # 3. re-lock (power-cut safe again)
 ```
+Changes that touch install steps (new sudoers, scripts, apt deps) need
+`deploy/install.sh` instead (safe to re-run). Unlike `update.sh`, **`install.sh` does
+not restart a running kiosk** — restart the services (or reboot) afterward so the new
+code goes live:
+```bash
+sudo systemctl restart pumpsim-backend pumpsim-kiosk
+```
 
 ## Power-cut protection (read-only overlay)
 A kiosk switched off at the wall can corrupt the SD card — an unclean power cut once
