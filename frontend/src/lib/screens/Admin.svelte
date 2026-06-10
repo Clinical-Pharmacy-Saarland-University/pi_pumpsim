@@ -23,12 +23,22 @@
   let primeMl = $state(0)
   let volumeMl = $state(0)
 
+  // system: read-only-overlay status + clean power control (two-tap confirm)
+  let overlay = $state<'on' | 'off' | 'unknown'>('unknown')
+  let powerPending = $state<null | 'shutdown' | 'reboot'>(null)
+  let powerMsg = $state('')
+  let powerTimer: ReturnType<typeof setTimeout> | null = null
+
   let cap = $derived(game.level?.capacity ?? 100)
   let isReal = $derived(game.level?.backend === 'real')
 
   // enter manual mode on open, leave (auto resumes + pump stops) on close
   onMount(() => {
     api.admin.manual(true).catch(() => {})
+    api.admin
+      .system()
+      .then((s) => (overlay = s.overlay))
+      .catch(() => {})
     api.admin
       .getCalibration()
       .then((c) => {
@@ -38,6 +48,7 @@
       })
       .catch(() => {})
     return () => {
+      if (powerTimer) clearTimeout(powerTimer)
       api.admin.manual(false).catch(() => {})
     }
   })
@@ -78,6 +89,20 @@
   }
   const doEmpty = () => api.admin.empty(emptyS || undefined).catch(() => {})
   const doCalibReset = () => api.admin.calibratedReset().catch(() => {})
+
+  // two-tap confirm: first tap arms (auto-disarms after 4 s), second tap fires
+  function armPower(action: 'shutdown' | 'reboot') {
+    if (powerPending === action) {
+      if (powerTimer) clearTimeout(powerTimer)
+      powerPending = null
+      powerMsg = action === 'shutdown' ? t('admin.shuttingDown') : t('admin.rebooting')
+      api.admin[action]().catch(() => {})
+      return
+    }
+    powerPending = action
+    if (powerTimer) clearTimeout(powerTimer)
+    powerTimer = setTimeout(() => (powerPending = null), 4000)
+  }
 
   const pct = (f: number | undefined) => Math.round((f ?? 0) * 100)
 </script>
@@ -182,6 +207,40 @@
       </div>
 
       <button class="reset" onclick={resetBaseline}>{t('admin.reset')}</button>
+
+      <div class="block system">
+        <div class="bhead">
+          {t('admin.system')}
+          {#if overlay !== 'unknown'}
+            <span class="lock" class:locked={overlay === 'on'}>
+              {overlay === 'on' ? t('admin.locked') : t('admin.unlocked')}
+            </span>
+          {/if}
+        </div>
+        {#if overlay !== 'unknown'}
+          <p class="lockhint">{overlay === 'on' ? t('admin.lockedHint') : t('admin.unlockedHint')}</p>
+        {/if}
+        {#if powerMsg}
+          <p class="powermsg">{powerMsg}</p>
+        {:else}
+          <div class="powerrow">
+            <button
+              class="reboot"
+              class:arm={powerPending === 'reboot'}
+              onclick={() => armPower('reboot')}
+            >
+              {powerPending === 'reboot' ? t('admin.rebootConfirm') : t('admin.reboot')}
+            </button>
+            <button
+              class="shutdown"
+              class:arm={powerPending === 'shutdown'}
+              onclick={() => armPower('shutdown')}
+            >
+              {powerPending === 'shutdown' ? t('admin.shutdownConfirm') : t('admin.shutdown')}
+            </button>
+          </div>
+        {/if}
+      </div>
     </section>
   </div>
 
@@ -450,6 +509,66 @@
     padding: 14px;
     font-weight: 600;
     color: #e8edff;
+  }
+
+  /* system: lock status + clean power control */
+  .system .bhead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .lock {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #e0a23a; /* OFFEN / writable = amber warning */
+    color: #2a1c04;
+  }
+  .lock.locked {
+    background: var(--green, #1f9d6b); /* GESPERRT / read-only = protected */
+    color: #fff;
+  }
+  .lockhint {
+    margin: 0 0 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--dim);
+  }
+  .powerrow {
+    display: flex;
+    gap: 8px;
+  }
+  .powerrow button {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 16px 8px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.3;
+  }
+  .powerrow .reboot {
+    background: #3b7bd6;
+  }
+  .powerrow .shutdown {
+    background: #d6453b;
+  }
+  .powerrow button.arm {
+    animation: armpulse 0.8s ease-in-out infinite;
+  }
+  @keyframes armpulse {
+    50% {
+      filter: brightness(1.4);
+    }
+  }
+  .powermsg {
+    margin: 0;
+    padding: 14px 8px;
+    text-align: center;
+    font-weight: 700;
+    color: #ffd27f;
   }
   footer {
     font-size: 11px;

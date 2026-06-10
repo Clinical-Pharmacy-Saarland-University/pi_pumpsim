@@ -28,6 +28,37 @@ so the very first boot drives nothing on the GPIO until you opt in.
 ```bash
 cd pi_pumpsim && deploy/update.sh    # git pull → rebuild UI → restart services
 ```
+If the **read-only overlay** is enabled (see below), `update.sh` refuses — unlock,
+update, then re-lock:
+```bash
+deploy/overlay.sh off && sudo reboot     # 1. make the root fs writable
+# … after reboot …
+cd pi_pumpsim && deploy/update.sh        # 2. pull + rebuild
+deploy/overlay.sh on  && sudo reboot     # 3. re-lock (power-cut safe again)
+```
+
+## Power-cut protection (read-only overlay)
+A kiosk switched off at the wall can corrupt the SD card — an unclean power cut once
+wiped the saved WiFi profile (NetworkManager rewrites it on every connect; a cut
+mid-write + ext4 journal recovery dropped the file). The fix is Raspberry Pi OS's
+**overlay filesystem**: the root partition is mounted read-only and all writes go to a
+RAM layer discarded on reboot, so a power loss has nothing to corrupt.
+
+```bash
+deploy/overlay.sh status                 # ON (read-only) / OFF (writable)
+deploy/overlay.sh on  && sudo reboot     # enable  (lock)
+deploy/overlay.sh off && sudo reboot     # disable (unlock — to update/calibrate)
+```
+**While the overlay is ON, all changes vanish on reboot** — including pump calibration
+(`backend/calibration.json`), `backend/.env`, and WiFi. So do setup/calibration/updates
+with the overlay **OFF**, then turn it **ON** for unattended field use. The on-screen
+admin **System** panel shows the current state (🔒 GESPERRT / 🔓 OFFEN).
+
+## Clean shutdown (no more yanking power)
+The admin **System** panel (triple-tap the logo) has **Herunterfahren** and **Neustart**
+buttons (two-tap to confirm) so the on-site operator can power down cleanly without SSH.
+`deploy/install.sh` installs a minimal sudoers drop-in (`/etc/sudoers.d/pumpsim-power`)
+granting the backend user passwordless `systemctl poweroff`/`reboot` — and nothing else.
 
 ## Configuration (`backend/.env`)
 Copied from `backend/.env.example` on install. Key fields:

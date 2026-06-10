@@ -6,6 +6,7 @@ Run (dev):  python -m uvicorn app.main:app --reload --port 8000
 """
 from __future__ import annotations
 
+import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -180,6 +181,49 @@ def admin_calibrated_reset() -> dict:
     if rate_in > 0 and prime_ml > 0:
         steps.append({"dir": "in", "speed": 1.0, "seconds": (prime_ml + dead) / rate_in})
     _runner().run_sequence(steps)
+    return {"ok": True}
+
+
+# --- system: read-only-overlay status + clean power control (kiosk) ---------
+def _overlay_state() -> str:
+    """'on' if the read-only overlay (power-cut protection) is active, 'off' if the
+    root fs is writable, 'unknown' off-Pi. Reads the running kernel cmdline — no
+    privilege needed."""
+    try:
+        cmdline = Path("/proc/cmdline").read_text()
+    except OSError:
+        return "unknown"
+    return "on" if "boot=overlay" in cmdline else "off"
+
+
+def _power(action: str) -> None:
+    """Stop the pump, then ask systemd to poweroff/reboot. Fire-and-forget so the
+    HTTP response still returns before the system goes down. Relies on the sudoers
+    drop-in (deploy/pumpsim-power.sudoers) granting NOPASSWD systemctl poweroff/reboot."""
+    try:
+        _runner().manual_stop()
+    except Exception:
+        pass
+    try:
+        subprocess.Popen(["sudo", "-n", "/usr/bin/systemctl", action])
+    except OSError:
+        pass  # off-Pi / no sudo — nothing to power down
+
+
+@app.get("/api/admin/system")
+def admin_system() -> dict:
+    return {"overlay": _overlay_state()}
+
+
+@app.post("/api/admin/shutdown")
+def admin_shutdown() -> dict:
+    _power("poweroff")
+    return {"ok": True}
+
+
+@app.post("/api/admin/reboot")
+def admin_reboot() -> dict:
+    _power("reboot")
     return {"ok": True}
 
 

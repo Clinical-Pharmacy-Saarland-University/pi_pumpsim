@@ -61,5 +61,14 @@ export const api = {
     saveCalibration: (c: unknown) => post('/api/admin/calibration', c),
     empty: (seconds?: number) => post('/api/admin/empty', { seconds: seconds ?? null }),
     calibratedReset: () => post('/api/admin/calibrated_reset'),
+
+    /** System: read-only-overlay status + clean power control (kiosk). */
+    system: async (): Promise<{ overlay: 'on' | 'off' | 'unknown' }> => {
+      const r = await fetch('/api/admin/system')
+      if (!r.ok) throw new Error(`system -> ${r.status}`)
+      return r.json()
+    },
+    shutdown: () => post('/api/admin/shutdown'),
+    reboot: () => post('/api/admin/reboot'),
   },
 }

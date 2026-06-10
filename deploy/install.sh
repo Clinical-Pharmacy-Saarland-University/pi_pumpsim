@@ -67,7 +67,19 @@ for unit in pumpsim-backend.service pumpsim-kiosk.service; do
   sudo install -m 0644 "$TMP/$unit" "/etc/systemd/system/$unit"
 done
 rm -rf "$TMP"
-chmod +x "$APP_DIR/deploy/kiosk.sh"
+chmod +x "$APP_DIR/deploy/kiosk.sh" "$APP_DIR/deploy/overlay.sh"
+
+echo "==> sudoers: allow clean shutdown/reboot from the admin panel"
+# The backend (User=$USER_NAME) needs passwordless poweroff/reboot for the on-screen
+# System panel. Grant exactly that and nothing else; validate before installing.
+SUDO_TMP="$(mktemp)"
+sed "s|__USER__|$USER_NAME|g" "$APP_DIR/deploy/pumpsim-power.sudoers" > "$SUDO_TMP"
+if sudo visudo -cf "$SUDO_TMP" >/dev/null; then
+  sudo install -m 0440 "$SUDO_TMP" /etc/sudoers.d/pumpsim-power
+else
+  echo "  !! sudoers file failed validation — skipped (admin shutdown button will no-op)" >&2
+fi
+rm -f "$SUDO_TMP"
 
 echo "==> install sway kiosk config (rotates the display to landscape)"
 sudo mkdir -p /etc/pumpsim

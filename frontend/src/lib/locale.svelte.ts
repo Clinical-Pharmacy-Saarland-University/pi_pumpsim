@@ -582,6 +582,21 @@ const de: Record<string, string> = {
   'admin.resetHint':
     'Entleeren pumpt OUT über die Torso-Menge hinaus (zieht am Ende Luft – für eine Peristaltikpumpe unkritisch). „Kalibrierter Reset" entleert und füllt dann „Vorfüllen" ml wieder ein.',
 
+  // system: clean shutdown / reboot + read-only-overlay (power-cut protection) status
+  'admin.system': 'System',
+  'admin.shutdown': '⏻ Herunterfahren',
+  'admin.reboot': '↻ Neustart',
+  'admin.shutdownConfirm': 'Wirklich ausschalten? Zum Bestätigen erneut tippen.',
+  'admin.rebootConfirm': 'Wirklich neu starten? Zum Bestätigen erneut tippen.',
+  'admin.shuttingDown': 'Fährt herunter … Strom erst trennen, wenn der Bildschirm aus ist.',
+  'admin.rebooting': 'Startet neu …',
+  'admin.locked': '🔒 GESPERRT',
+  'admin.unlocked': '🔓 OFFEN',
+  'admin.lockedHint':
+    'Schreibgeschützt – übersteht Stromausfälle. Änderungen an Kalibrierung/Einstellungen gehen beim Neustart verloren. Zum dauerhaften Ändern per SSH: deploy/overlay.sh off → neu starten.',
+  'admin.unlockedHint':
+    'Beschreibbar – Änderungen bleiben erhalten. Für den Dauerbetrieb per SSH sperren: deploy/overlay.sh on → neu starten (schützt vor Stromausfall-Schäden).',
+
   // virtual torso — dev-only twin panel outside the Pi frame
   'twin.title': 'Virtueller Torso',
   'twin.volume': 'Volumen',
