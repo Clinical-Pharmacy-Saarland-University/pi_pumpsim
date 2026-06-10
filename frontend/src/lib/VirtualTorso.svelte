@@ -13,10 +13,15 @@
   let cap = $derived(s?.capacity ?? 100)
   const pct = (v: number) => Math.max(0, Math.min(100, (v / cap) * 100))
 
+  // DEV physics sim: when on, the tank shows the REAL water (sim_level), and the
+  // twin's BELIEVED level is drawn as a dashed marker — so the init/home flow that
+  // reconciles them is visible.
+  let simOn = $derived(!!s?.sim_active)
   let volume = $derived(s?.torso_volume_ml ?? 1800)
-  let levelMl = $derived(s?.level_ml ?? 0)
+  let levelMl = $derived(simOn ? (s?.sim_level_ml ?? 0) : (s?.level_ml ?? 0))
   let targetMl = $derived(s?.target_ml ?? 0)
-  let waterH = $derived(pct(s?.level ?? 0))
+  let waterH = $derived(pct(simOn ? (s?.sim_level ?? 0) : (s?.level ?? 0)))
+  let believedPct = $derived(pct(s?.level ?? 0))
   let targetPct = $derived(pct(s?.target ?? 0))
   let bandTop = $derived(100 - pct(s?.band_high ?? 70))
   let bandH = $derived(pct(s?.band_high ?? 70) - pct(s?.band_low ?? 55))
@@ -49,6 +54,9 @@
       <span class="badge" class:real={s.backend === 'real'}>
         {s.backend === 'real' ? 'REAL' : 'MOCK'}
       </span>
+      {#if s.sim_active}
+        <span class="badge sim" class:homed={s.homed}>{s.homed ? 'HOMED' : 'UNKNOWN'}</span>
+      {/if}
     {/if}
   </header>
 
@@ -68,6 +76,12 @@
       <div class="crit lo" style="bottom:{critLow}%"></div>
 
       <div class="water" style="height:{waterH}%"><span class="meniscus"></span></div>
+
+      {#if simOn && s}
+        <div class="believed" class:known={s.homed} style="bottom:{believedPct}%">
+          <em>{s.homed ? `system ${Math.round(s.level)}%` : 'system: ?'}</em>
+        </div>
+      {/if}
 
       {#if showTarget && s}
         <div class="goal" style="bottom:{targetPct}%">
@@ -140,6 +154,39 @@
   .badge.off {
     background: var(--toxic);
     color: #2a0408;
+  }
+  .badge.sim {
+    background: var(--toxic);
+    color: #2a0408;
+  }
+  .badge.sim.homed {
+    background: var(--green);
+    color: #04222a;
+  }
+
+  /* dev sim: the twin's believed level vs the real water */
+  .believed {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 2px dashed #ffd27f;
+    opacity: 0.85;
+  }
+  .believed.known {
+    border-top-color: var(--green-line, #1f9d6b);
+  }
+  .believed em {
+    position: absolute;
+    top: 2px;
+    left: 6px;
+    font-style: normal;
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffd27f;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  }
+  .believed.known em {
+    color: var(--green-line, #1f9d6b);
   }
 
   .big {

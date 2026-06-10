@@ -40,10 +40,45 @@ async function post(path: string, body?: unknown): Promise<unknown> {
 
 type Dir = 'in' | 'out' | 'stop'
 
+/** Kiosk health for the admin badges (real on the Pi, faked on the dev PC). */
+export interface SystemHealth {
+  overlay: 'on' | 'off' | 'unknown'
+  pi: boolean
+  simulated: boolean
+  temp_c: number | null
+  throttled: string | null // raw vcgencmd bitmask, e.g. "0x0"
+  under_voltage_now: boolean | null
+  freq_capped_now: boolean | null
+  throttled_now: boolean | null
+  soft_temp_now: boolean | null
+  under_voltage_ever: boolean | null
+  freq_capped_ever: boolean | null
+  throttled_ever: boolean | null
+  soft_temp_ever: boolean | null
+}
+
+/** The re-home plan: derived (or overridden) empty/prime durations. */
+export interface PreparePlan {
+  empty_s: number
+  empty_src: 'derived' | 'override' | 'fallback'
+  prime_ml: number
+  prime_s: number
+  prime_src: 'derived' | 'override'
+  tube_prime_s: number
+  dead_space_ml: number
+  baseline: number
+  volume_ml: number
+  rate_in: number
+  rate_out: number
+  backend: string
+}
+
 export const api = {
   /** Tell the torso to move toward `level` (0–100), optionally at a custom rate. */
   setTarget: (level: number, rate?: number) => post('/api/level/target', { level, rate }),
   reset: () => post('/api/level/reset'),
+  /** Re-home: overpump empty → prime to baseline → snap the twin (mock: settle at baseline). */
+  prepare: () => post('/api/level/prepare'),
 
   /** Direct pump control for the admin/calibration screen. speed is 0..1. */
   admin: {
@@ -51,6 +86,8 @@ export const api = {
     pump: (dir: Dir, speed: number) => post('/api/admin/pump', { dir, speed }),
     run: (dir: Dir, speed: number, seconds: number) =>
       post('/api/admin/run', { dir, speed, seconds }),
+    /** Live-adjust the speed of a running manual/timed job (no timer reset). */
+    setSpeed: (speed: number) => post('/api/admin/speed', { speed }),
     stop: () => post('/api/admin/stop'),
     reset: () => post('/api/admin/reset'),
     getCalibration: async () => {
@@ -60,15 +97,31 @@ export const api = {
     },
     saveCalibration: (c: unknown) => post('/api/admin/calibration', c),
     empty: (seconds?: number) => post('/api/admin/empty', { seconds: seconds ?? null }),
-    calibratedReset: () => post('/api/admin/calibrated_reset'),
+    /** Full re-home (first boot / recovery). Same routine the game runs between runs. */
+    prepare: () => post('/api/level/prepare'),
+    /** Marking workflow: overpump empty + anchor the twin at level 0 ("home"). */
+    home: () => post('/api/level/home'),
+    /** Drive to an exact level to tape a mark (needs a homed twin to be accurate). */
+    goto: (level: number) => post('/api/level/goto', { level }),
+    preparePlan: async (): Promise<PreparePlan> => {
+      const r = await fetch('/api/level/prepare_plan')
+      if (!r.ok) throw new Error(`prepare_plan -> ${r.status}`)
+      return r.json()
+    },
 
-    /** System: read-only-overlay status + clean power control (kiosk). */
-    system: async (): Promise<{ overlay: 'on' | 'off' | 'unknown' }> => {
+    /** System: overlay lock + SoC temp/throttle health + clean power control. */
+    system: async (): Promise<SystemHealth> => {
       const r = await fetch('/api/admin/system')
       if (!r.ok) throw new Error(`system -> ${r.status}`)
       return r.json()
     },
     shutdown: () => post('/api/admin/shutdown'),
     reboot: () => post('/api/admin/reboot'),
+  },
+
+  /** DEV-only (mock): rehearse the init flow against a torso with unknown water. */
+  dev: {
+    simulateStart: (fill: number) => post('/api/dev/simulate_start', { fill }),
+    clearSim: () => post('/api/dev/clear_sim'),
   },
 }

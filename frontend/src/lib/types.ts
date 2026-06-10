@@ -19,6 +19,8 @@ export interface LevelState {
   level_ml: number
   target_ml: number
   pump_running: boolean
+  pump_busy: boolean // a timed run / prepare sequence is in progress
+  homed: boolean // twin anchored to a known physical level (marking workflow)
   // pump / admin telemetry
   pump_direction: 'in' | 'out' | 'stop'
   pump_speed: number // 0..1 duty fraction
@@ -27,4 +29,8 @@ export interface LevelState {
   manual: boolean
   backend: string // "mock" | "real"
   version: string // app version (from the repo-root VERSION file)
+  // DEV physics sim (mock only): the hidden TRUE water level the system doesn't know
+  sim_active: boolean
+  sim_level: number
+  sim_level_ml: number
 }

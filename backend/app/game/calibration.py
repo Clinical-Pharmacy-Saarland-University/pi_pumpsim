@@ -13,19 +13,27 @@ CALIB_PATH = Path(__file__).resolve().parents[2] / "calibration.json"
 # committed baseline (in git); used when no per-machine calibration.json exists
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "calibration.default.json"
 
-# Until the wizard has run on the real torso we assume 40 ml/s at 100% duty and a
-# ~1.8 L torso (keep these in sync with calibration.default.json). They make the
-# mock/virtual torso physically plausible out of the box.
+# Sensible out-of-the-box calibration (keep in sync with calibration.default.json):
+# 40 ml/s at full duty both ways, a ~1.8 L torso, deadbands 15 %/17 %, and a tube
+# dead-volume for a 85 cm × 7 mm line (π·0.35²·85 ≈ 32.7 ml). empty/prime times stay
+# null so they auto-derive from volume ÷ rate. Makes the mock physically plausible.
 DEFAULT: dict = {
-    "deadband_in": None,        # duty 0..1 where the IN rotor just starts turning
-    "deadband_out": None,       # duty 0..1 where the OUT rotor just starts turning
+    "deadband_in": 0.15,        # duty 0..1 where the IN rotor just starts turning
+    "deadband_out": 0.17,       # duty 0..1 where the OUT rotor just starts turning
     "rate_in": 40.0,            # ml/s at 100% duty, fill
     "rate_out": 40.0,           # ml/s at 100% duty, drain
     "torso_volume_ml": 1800.0,  # ml from level 0 to level 100 (capacity of the torso)
-    "dead_space_ml": None,      # ml of tubing dead-volume (prime/residual)
-    "empty_overpump_s": None,   # seconds to run OUT to guarantee empty (overpump -> pulls air)
-    "prime_in_ml": None,        # ml to pump IN after empty to reach the game's start level
-    "samples": [],              # [{"dir": "in"|"out", "duty": 0..1, "ml_per_s": float}]
+    "dead_space_ml": 32.7,      # ml of tubing dead-volume (85 cm × 7 mm line)
+    "empty_overpump_s": None,   # seconds to run OUT to guarantee empty (else auto-derived)
+    "prime_in_ml": None,        # ml to pump IN after empty (else auto-derived to baseline)
+    "samples": [                # [{"dir": "in"|"out", "duty": 0..1, "ml_per_s": float}]
+        {"dir": "in", "duty": 1.0, "ml_per_s": 40.0},
+        {"dir": "in", "duty": 0.7, "ml_per_s": 25.9},
+        {"dir": "in", "duty": 0.4, "ml_per_s": 11.8},
+        {"dir": "out", "duty": 1.0, "ml_per_s": 40.0},
+        {"dir": "out", "duty": 0.7, "ml_per_s": 25.5},
+        {"dir": "out", "duty": 0.4, "ml_per_s": 11.1},
+    ],
 }
 
 

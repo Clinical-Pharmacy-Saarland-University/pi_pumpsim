@@ -34,8 +34,20 @@ class LevelRunner:
         self.volume_ml: float = float(CAL_DEFAULT["torso_volume_ml"])
         self.rate_in_ml_s: float | None = None   # ml/s at 100% duty, fill
         self.rate_out_ml_s: float | None = None  # ml/s at 100% duty, drain
+        self.deadband_in: float = 0.0            # duty below which the IN rotor won't turn
+        self.deadband_out: float = 0.0           # duty below which the OUT rotor won't turn
+        self.dead_space_ml: float = 0.0          # tubing dead-volume (prime/residual)
         self._manual_remaining: float | None = None  # seconds left on the current step
-        self._seq: list[dict] = []  # queued timed steps (empty / calibrated reset)
+        self._seq: list[dict] = []  # queued timed steps (empty / prepare / mark goto)
+        self._sync_level_after: float | None = None  # snap twin to this level when the seq ends
+        self.homed = False  # is the twin anchored to a known physical level?
+        # DEV physics sim (mock only): a hidden TRUE physical level the system doesn't
+        # know — lets us play the init/home workflow against a torso that already has
+        # water. Integrated from the actual pump commands at the calibrated rate.
+        self.sim_active = False
+        self.sim_level = 0.0                     # 0..100, the real water (hidden from the twin)
+        self.sim_tube_units = 0.0                # tube fill (level-units 0..dead-space); air below
+        self.sim_time_scale = 6.0                # sim runs this much faster than wall-clock
         self._listeners: set[asyncio.Queue] = set()
         self._task: asyncio.Task | None = None
         if calibration:
@@ -63,14 +75,59 @@ class LevelRunner:
         self.manual = False
         self._manual_remaining = None
         self._seq = []
+        self._sync_level_after = None
+        self.homed = False  # a software snap is not a known physical state
         self.ctrl.reset(immediate=True)
         self.pump.drive("stop")
+
+    # --- DEV physics sim (mock only) --------------------------------------
+    def simulate_start(self, fill_level: float) -> None:
+        """DEV: pretend the system just powered on with an UNKNOWN amount of water
+        already in the torso. Sets the hidden TRUE level and re-boots the belief
+        (twin → baseline, homed False). Real pump commands then move the real water,
+        so Home/Initialize can be played through against it. Mock only."""
+        if self.backend == "real":
+            return
+        self.sim_active = True
+        self.sim_level = max(0.0, min(100.0, fill_level))
+        # leftover water means the line was wet — start the tube primed (full)
+        cap = self.ctrl.cfg.capacity or 100.0
+        self.sim_tube_units = self.dead_space_ml / self.volume_ml * cap if self.volume_ml > 0 else 0.0
+        self.reset()  # belief goes back to a fresh, untrusted boot
+
+    def clear_sim(self) -> None:
+        self.sim_active = False
+        self.sim_level = 0.0
+        self.sim_tube_units = 0.0
+
+    def _sim_step(self, dt: float) -> None:
+        """Advance the hidden true state by what the pump actually moved this tick,
+        through a 2-compartment model: a tube (dead-space) between the pump and the
+        torso. Filling tops up the tube FIRST, then the torso; draining empties the
+        torso first, then the tube (pulling air). Flow honours the deadband — so Home
+        ends at a true 0 and a calibrated prime lands exactly on baseline."""
+        if not self.sim_active or not self.pump.is_running:
+            return
+        flow = self._flow_units(self.pump.direction, self.pump.speed) * dt
+        if flow <= 0:
+            return
+        cap = self.ctrl.cfg.capacity or 100.0
+        dead_units = self.dead_space_ml / self.volume_ml * cap if self.volume_ml > 0 else 0.0
+        if self.pump.direction == "in":
+            fill_tube = min(flow, max(0.0, dead_units - self.sim_tube_units))
+            self.sim_tube_units += fill_tube
+            self.sim_level = min(cap, self.sim_level + (flow - fill_tube))
+        elif self.pump.direction == "out":
+            drain_torso = min(flow, self.sim_level)
+            self.sim_level = max(0.0, self.sim_level - drain_torso)
+            self.sim_tube_units = max(0.0, self.sim_tube_units - (flow - drain_torso))
 
     # --- admin (manual) commands ------------------------------------------
     def set_manual(self, on: bool) -> None:
         self.manual = on
         self._manual_remaining = None
         self._seq = []
+        self._sync_level_after = None
         self.pump.drive("stop")
         if not on:
             self.ctrl.target = self.ctrl.level  # don't snap when auto resumes
@@ -79,28 +136,106 @@ class LevelRunner:
         self.manual = True
         self._manual_remaining = None
         self._seq = []
+        self._sync_level_after = None
+        self.homed = False  # a freehand jog can't be trusted to land anywhere known
         self.pump.drive(direction, speed)
 
     def manual_run(self, direction: str, speed: float, seconds: float) -> None:
         self.manual = True
         self._seq = []
+        self._sync_level_after = None
+        self.homed = False
         self.pump.drive(direction, speed)
         self._manual_remaining = max(0.1, min(120.0, seconds))
+
+    def manual_set_speed(self, speed: float) -> None:
+        """Live-adjust the pump speed WITHOUT disturbing an active timed run or
+        sequence. Re-actuates the pump at the new duty if it's currently moving;
+        leaves the countdown (`_manual_remaining`) and queue (`_seq`) untouched.
+
+        Only takes effect in manual mode so it can never perturb an auto game.
+        """
+        if not self.manual:
+            return
+        self.pump.set_speed(speed)
 
     def manual_stop(self) -> None:
         self._manual_remaining = None
         self._seq = []
+        self._sync_level_after = None
         self.pump.drive("stop")
 
-    def run_sequence(self, steps: list[dict]) -> None:
+    def run_sequence(self, steps: list[dict], sync_level: float | None = None) -> None:
         """Run a list of timed pump steps: [{dir, speed, seconds}, ...].
 
-        Used for empty/overpump and the calibrated reset (drain to empty, then
-        prime in a known volume). Drives in manual mode and auto-advances.
+        Used for empty/overpump, prepare and the marking gotos. Drives in manual
+        mode and auto-advances. `sync_level` (if given) snaps the twin to that level
+        once the sequence finishes — the "we now physically know where the water is"
+        assertion that powers `homed`. A bare sequence (None) leaves the twin
+        un-anchored, so `homed` stays False.
         """
         self.manual = True
+        self.homed = False
+        self._sync_level_after = sync_level
         self._seq = [dict(s) for s in steps]
         self._advance_seq()
+
+    def _sync_twin(self, level: float) -> None:
+        """Anchor the twin to a now-known physical level and resume auto."""
+        level = max(0.0, min(self.ctrl.cfg.capacity, level))
+        self.ctrl.level = level
+        self.ctrl.target = level
+        self.ctrl.rate = self.ctrl.cfg.rate
+        self.manual = False
+        self.homed = True
+
+    def prepare(self, empty_s: float, prime_s: float) -> None:
+        """Re-home to a known start. On REAL hardware: overpump empty, prime to
+        baseline, then snap the twin to baseline. On mock the twin IS ground truth
+        (no real water, no drift), so just settle it at baseline — keeps dev fast.
+        When the DEV sim is on, mock runs the REAL sequence so the sim drains/fills."""
+        if self.backend != "real" and not self.sim_active:
+            self.set_target(self.ctrl.cfg.baseline)
+            self.homed = True
+            return
+        steps: list[dict] = [{"dir": "out", "speed": 1.0, "seconds": empty_s}]
+        if prime_s > 0:
+            steps.append({"dir": "in", "speed": 1.0, "seconds": prime_s})
+        self.run_sequence(steps, sync_level=self.ctrl.cfg.baseline)
+
+    def home_empty(self, empty_s: float, tube_prime_s: float = 0.0) -> None:
+        """Overpump empty, re-prime the tube (pump IN the dead-space so the line is
+        full to the torso entry while the torso stays at 0), then anchor the twin at
+        level 0 — the physical 'home'. With the tube primed, every later fill (goto /
+        prepare) is a clean torso-volume number. Mock just declares zero — unless the
+        DEV sim is on, when it actually pumps the real water out."""
+        if self.backend != "real" and not self.sim_active:
+            self.set_target(0.0)
+            self.homed = True
+            return
+        steps: list[dict] = [{"dir": "out", "speed": 1.0, "seconds": empty_s}]
+        if tube_prime_s > 0:
+            steps.append({"dir": "in", "speed": 1.0, "seconds": tube_prime_s})
+        self.run_sequence(steps, sync_level=0.0)
+
+    def goto_level(self, level: float) -> None:
+        """Drive to an exact level (to mark the torso). REAL: pump the precise volume
+        delta from the current (homed) level at the calibrated rate, then snap. Mock:
+        jump the twin straight there (or pump it, when the DEV sim is on)."""
+        level = max(0.0, min(self.ctrl.cfg.capacity, level))
+        if self.backend != "real" and not self.sim_active:
+            self.set_target(level)
+            self.homed = True
+            return
+        cap = self.ctrl.cfg.capacity or 100.0
+        delta_ml = abs(level - self.ctrl.level) / cap * self.volume_ml
+        direction = "in" if level >= self.ctrl.level else "out"
+        rate = self._dir_rate_ml_s(direction) or 0.0
+        seconds = delta_ml / rate if rate > 0 else 0.0
+        if seconds <= 0:
+            self._sync_twin(level)
+            return
+        self.run_sequence([{"dir": direction, "speed": 1.0, "seconds": seconds}], sync_level=level)
 
     def _advance_seq(self) -> None:
         if self._seq:
@@ -110,6 +245,10 @@ class LevelRunner:
         else:
             self._manual_remaining = None
             self.pump.drive("stop")
+            if self._sync_level_after is not None:
+                lvl = self._sync_level_after
+                self._sync_level_after = None
+                self._sync_twin(lvl)  # twin is now physically at this level
 
     # --- calibration ---------------------------------------------------------
     def apply_calibration(self, cal: dict) -> None:
@@ -123,6 +262,9 @@ class LevelRunner:
         rate_out = cal.get("rate_out") or CAL_DEFAULT["rate_out"]
         self.rate_in_ml_s = float(rate_in) if rate_in else None
         self.rate_out_ml_s = float(rate_out) if rate_out else None
+        self.deadband_in = float(cal.get("deadband_in") or 0.0)
+        self.deadband_out = float(cal.get("deadband_out") or 0.0)
+        self.dead_space_ml = float(cal.get("dead_space_ml") or 0.0)
         self.volume_ml = float(cal.get("torso_volume_ml") or CAL_DEFAULT["torso_volume_ml"])
         if self.rate_in_ml_s:
             self.pump.set_rate(self.rate_in_ml_s)
@@ -131,31 +273,92 @@ class LevelRunner:
         """Calibrated full-duty flow for a direction (drain is often slower)."""
         return self.rate_out_ml_s if direction == "out" else self.rate_in_ml_s
 
+    def _rate_units(self, direction: str) -> float | None:
+        """Calibrated full-duty rate as level-units/s (ml/s mapped over the torso)."""
+        r = self._dir_rate_ml_s(direction)
+        if not r or self.volume_ml <= 0:
+            return None
+        return r / self.volume_ml * 100.0
+
+    def _deadband(self, direction: str) -> float:
+        return self.deadband_out if direction == "out" else self.deadband_in
+
+    def _flow_units(self, direction: str, duty: float) -> float:
+        """Actual flow (level-units/s) at a given duty: zero below the deadband, then
+        ramping linearly to the calibrated full-duty rate at duty 1.0."""
+        r = self._rate_units(direction)
+        if not r:
+            return 0.0
+        db = self._deadband(direction)
+        span = 1.0 - db
+        if duty <= db or span <= 0:
+            return 0.0
+        return r * (duty - db) / span
+
     # --- loop -------------------------------------------------------------
+    def _substeps(self) -> int:
+        """How many fine physics sub-steps to run this wall-tick. During a DEV-sim
+        timed sequence (init / home / goto) we fast-forward by running several fine
+        sub-steps — kept fine so the fast-forward stays numerically accurate (the
+        tube/torso fills land on exact volumes). Everything else is one real-time
+        step, so a game played with the sim on isn't sped up."""
+        seq = self.manual and (self._manual_remaining is not None or bool(self._seq))
+        return int(self.sim_time_scale) if (self.sim_active and seq) else 1
+
     def _tick(self) -> None:
-        """One simulation step (sync, so tests can drive it without the loop)."""
+        """One wall-clock step (sync, so tests can drive it without the loop)."""
+        for _ in range(self._substeps()):
+            self._step(self.dt)
+
+    def _step(self, dt: float) -> None:
         # keep the pump's telemetry rate in sync with the calibrated per-direction flow
         rate_ml = self._dir_rate_ml_s(self.pump.direction)
         if rate_ml and rate_ml != self.pump.rate_ml_s:
             self.pump.set_rate(rate_ml)
         if self.manual:
             if self._manual_remaining is not None:
-                self._manual_remaining -= self.dt
+                self._manual_remaining -= dt
                 if self._manual_remaining <= 0:
-                    if self._seq:
-                        self._advance_seq()  # next step in the sequence
-                    else:
-                        self._manual_remaining = None
-                        self.pump.drive("stop")
-            # physically-accurate twin feedback: calibrated ml/s over the torso volume
-            rate_units = (
-                rate_ml / self.volume_ml * 100.0 if rate_ml and self.volume_ml > 0 else None
-            )
-            self.ctrl.manual_step(self.pump.direction, self.pump.speed, self.dt, rate_units)
+                    # advance to the next step, OR (if this was the last) stop and run
+                    # the end-of-sequence sync. _advance_seq handles both — calling it
+                    # only when `_seq` is non-empty would skip the final sync/homed.
+                    self._advance_seq()
+            # Manual motion is raw motor control and is deliberately NOT tracked:
+            # there's no level sensor, so the twin stays put until a home/goto/prepare
+            # snaps it to a known level. (Stops us fooling ourselves about the level.)
         else:
-            self.ctrl.tick(self.dt)
-            direction = self.ctrl.direction
-            self.pump.drive(direction, 1.0 if direction != "stop" else 0.0)
+            self._auto_follow(dt)
+        self._sim_step(dt)  # advance the hidden true level from the actual pump command
+
+    def _auto_follow(self, dt: float) -> None:
+        """Auto (in-game) mode: move the level toward target using the CALIBRATED pump
+        rate, modulating the pump duty so the displayed level always equals the water
+        the pump actually moves. `ctrl.rate` is the desired pace — honoured when it's
+        slower than the pump (gentle drift at low duty), capped at the pump rate when
+        faster (water can't move quicker than the pump). Falls back to the legacy
+        full-duty pacing only when the pump rate isn't calibrated."""
+        c = self.ctrl
+        diff = c.target - c.level
+        if abs(diff) < 1e-6:
+            self.pump.drive("stop", 0.0)
+            return
+        direction = "in" if diff > 0 else "out"
+        pump_rate_u = self._rate_units(direction)
+        if not pump_rate_u:
+            c.tick(dt)  # uncalibrated: legacy game-rate pacing
+            self.pump.drive(direction if abs(c.target - c.level) > 1e-6 else "stop", 1.0)
+            return
+        full_step = pump_rate_u * dt              # units the pump moves at full duty
+        want_step = min(c.rate * dt, abs(diff))   # game-paced desire, capped at remaining
+        frac = max(0.0, min(1.0, want_step / full_step)) if full_step > 0 else 0.0
+        db = self._deadband(direction)
+        # map the desired flow fraction onto a duty ABOVE the deadband (the rotor
+        # doesn't turn below it); delivered volume is that fraction of full-duty flow
+        duty = db + (1.0 - db) * frac if frac > 0.0 else 0.0
+        delivered = min(full_step * frac, abs(diff))  # never overshoot the target
+        c.level = max(0.0, min(c.cfg.capacity, c.level + (delivered if direction == "in" else -delivered)))
+        moving = delivered > 1e-9
+        self.pump.drive(direction if moving else "stop", duty if moving else 0.0)
 
     async def _loop(self) -> None:
         while True:
@@ -172,6 +375,15 @@ class LevelRunner:
         snap["level_ml"] = round(self.ctrl.level / cap * self.volume_ml, 1)
         snap["target_ml"] = round(self.ctrl.target / cap * self.volume_ml, 1)
         snap["pump_running"] = self.pump.is_running
+        # a timed run / sequence is in progress (used by the UI to wait for prepare)
+        snap["pump_busy"] = bool(
+            self.manual and (self._manual_remaining is not None or self._seq)
+        )
+        snap["homed"] = self.homed  # twin anchored to a known physical level?
+        # DEV physics sim: the hidden TRUE water level (what the torso really holds)
+        snap["sim_active"] = self.sim_active
+        snap["sim_level"] = round(self.sim_level, 2)
+        snap["sim_level_ml"] = round(self.sim_level / cap * self.volume_ml, 1)
         snap["pump_direction"] = self.pump.direction
         snap["pump_speed"] = round(self.pump.speed, 3)
         snap["pump_flow_ml_s"] = round(self.pump.flow_ml_s, 3)
