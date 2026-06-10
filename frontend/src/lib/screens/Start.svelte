@@ -32,9 +32,13 @@
     logoTimer = setTimeout(() => (logoTaps = 0), 600)
   }
 
+  // emoji pairs: 🧒/🧑 render almost identically (Segoe + Noto), so each tile
+  // shows two figures — pigtails+kid vs. woman+beard read as "kids" / "grown-ups"
+  // at a glance, the pair matches the plural labels, and mixed skin tones keep
+  // the booth's audience represented.
   const AGES = [
-    { id: 'young', emoji: '🧒', key: 'age.young' },
-    { id: 'adult', emoji: '🧑', key: 'age.adult' },
+    { id: 'young', emoji: '👧👦🏽', key: 'age.young' },
+    { id: 'adult', emoji: '👩🧔🏿', key: 'age.adult' },
   ] as const
 </script>
 
@@ -50,16 +54,20 @@
   </header>
 
   <!-- selectors ------------------------------------------------------------ -->
-  <div class="panels">
+  <!-- dir=ltr pins panel + tile order on this screen: tapping العربية must not
+       teleport the tile the user just touched. Everything here is centered, so
+       Arabic loses nothing; the rest of the app still mirrors via dir=rtl. -->
+  <div class="panels" dir="ltr">
     <section class="panel lang">
       <div class="phead"><span class="pico">🌐</span>{t('start.lang')}</div>
-      <div class="flags">
+      <div class="langs">
         {#each LOCALES as l}
           <button
-            class="flag-tile"
+            class="lang-tile"
             class:sel={i18n.locale === l.id}
             onclick={() => setLocale(l.id)}
           >
+            <span class="bubble" dir="auto">{l.hello}</span>
             <span class="lname">{l.name}</span>
             <span class="check">✓</span>
           </button>
@@ -132,6 +140,10 @@
   .tag {
     margin-top: 12px;
     font-size: 23px;
+    /* explicit line-height: Arabic falls back to a font with much taller
+       'normal' metrics — without this the subtitle grows ~20px on locale
+       switch and the whole column below jumps */
+    line-height: 1.45;
     font-weight: 800;
     background: linear-gradient(90deg, var(--green), var(--spm-cyan-bright));
     -webkit-background-clip: text;
@@ -169,6 +181,7 @@
     align-items: center;
     gap: 10px;
     font-size: 16px;
+    line-height: 1.4; /* pin against Arabic font metrics (see .tag) */
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -179,29 +192,64 @@
     font-size: 22px;
   }
 
-  .flags {
+  .langs {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 10px;
   }
-  .flag-tile {
+  .lang-tile {
     position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    text-align: center;
-    padding: 14px 8px;
-    min-height: 96px;
+    gap: 12px;
+    padding: 14px 6px 12px;
+    min-height: 124px;
     background: var(--surface);
     border: 2px solid var(--border);
     border-radius: 18px;
     transition: transform 0.12s ease, border-color 0.2s ease, background 0.2s ease;
   }
-  .lname {
-    font-size: 17px;
-    font-weight: 800;
-    line-height: 1.15;
+  /* each language greets you in its own words — a little speech bubble */
+  .bubble {
+    position: relative;
+    padding: 8px 13px 9px;
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1;
     white-space: nowrap;
+    color: var(--spm-cyan-bright);
+    background: rgba(255, 255, 255, 0.09);
+    border-radius: 13px;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .bubble::after {
+    /* the bubble's tail */
+    content: '';
+    position: absolute;
+    left: 14px;
+    bottom: -7px;
+    width: 13px;
+    height: 8px;
+    background: inherit;
+    clip-path: polygon(0 0, 100% 0, 25% 100%);
+  }
+  .lang-tile.sel .bubble {
+    color: #04222a;
+    background: linear-gradient(120deg, var(--spm-cyan-bright), var(--spm-cyan));
+  }
+  .lname {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: 0.3px;
+    color: var(--dim);
+    white-space: nowrap;
+    transition: color 0.2s ease;
+  }
+  .lang-tile.sel .lname {
+    color: #fff;
   }
 
   .ages {
@@ -224,8 +272,10 @@
     transition: transform 0.12s ease, border-color 0.2s ease, background 0.2s ease;
   }
   .emoji {
-    font-size: 60px;
+    /* two glyphs per tile now — sized so the pair stays inside the tile */
+    font-size: 46px;
     line-height: 1;
+    letter-spacing: 2px;
     animation: bob 3.5s ease-in-out infinite;
   }
   .aname {
@@ -243,11 +293,11 @@
   }
 
   /* shared selected state + tap feedback */
-  .flag-tile:active,
+  .lang-tile:active,
   .age-tile:active {
     transform: scale(0.96);
   }
-  .flag-tile.sel,
+  .lang-tile.sel,
   .age-tile.sel {
     border-color: var(--spm-cyan);
     background: linear-gradient(160deg, rgba(0, 190, 202, 0.22), rgba(124, 92, 255, 0.14));
@@ -329,6 +379,7 @@
     margin-top: auto;
     padding: 10px 8px 2px;
     font-size: 12px;
+    line-height: 1.5; /* pin against Arabic font metrics (see .tag) */
     letter-spacing: 0.4px;
     color: rgba(154, 166, 201, 0.55);
     text-align: center;

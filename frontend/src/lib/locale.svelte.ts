@@ -4,12 +4,15 @@ type Params = Record<string, string | number>
 
 export type Locale = 'de' | 'en' | 'fr' | 'nl' | 'ar'
 
-export const LOCALES: { id: Locale; name: string }[] = [
-  { id: 'de', name: 'Deutsch' },
-  { id: 'en', name: 'English' },
-  { id: 'fr', name: 'Français' },
-  { id: 'nl', name: 'Nederlands' },
-  { id: 'ar', name: 'العربية' },
+// `hello` is the greeting each language tile shouts on the start screen — it is
+// per-language (the German tile always says „Hallo!"), so it lives here and not
+// in the t() dictionaries.
+export const LOCALES: { id: Locale; name: string; hello: string }[] = [
+  { id: 'de', name: 'Deutsch', hello: 'Hallo!' },
+  { id: 'en', name: 'English', hello: 'Hello!' },
+  { id: 'fr', name: 'Français', hello: 'Salut !' },
+  { id: 'nl', name: 'Nederlands', hello: 'Hoi!' },
+  { id: 'ar', name: 'العربية', hello: 'مرحباً!' },
 ]
 
 export type Age = 'young' | 'adult'
