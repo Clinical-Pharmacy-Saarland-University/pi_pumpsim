@@ -10,14 +10,14 @@ def test_starts_at_baseline():
     c = LevelController()
     assert c.level == c.cfg.baseline
     assert not c.moving
-    assert c.zone == "under"  # baseline 42 is below band 55
+    assert c.zone == "critical_low"  # baseline 20 sits below the critical-low line (35)
 
 
 def test_moves_toward_target_at_rate():
     c = LevelController(LevelConfig(rate=4.0))
     c.set_target(62)
     drive(c, 0.5)  # 0.5s * 4 = 2 units
-    assert 43.5 < c.level < 45  # moved up ~2 from baseline 42
+    assert 21.5 < c.level < 22.5  # moved up ~2 from baseline 20
     assert c.moving and c.direction == "in"
 
 

@@ -99,6 +99,8 @@ export const api = {
     empty: (seconds?: number) => post('/api/admin/empty', { seconds: seconds ?? null }),
     /** Full re-home (first boot / recovery). Same routine the game runs between runs. */
     prepare: () => post('/api/level/prepare'),
+    /** Prime-only init: no drain — assume the torso was hand-emptied, prime to baseline. */
+    prime: () => post('/api/level/prime'),
     /** Marking workflow: overpump empty + anchor the twin at level 0 ("home"). */
     home: () => post('/api/level/home'),
     /** Drive to an exact level to tape a mark (needs a homed twin to be accurate). */

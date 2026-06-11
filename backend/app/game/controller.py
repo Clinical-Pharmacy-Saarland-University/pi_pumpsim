@@ -18,8 +18,11 @@ def _clamp(v: float, lo: float, hi: float) -> float:
 
 @dataclass
 class LevelConfig:
+    # SINGLE SOURCE OF TRUTH for the torso level model — these are TAPED on the
+    # physical torso. Must stay in lockstep with the frontend `LEVELS` in
+    # frontend/src/lib/flow.ts (change both together).
     capacity: float = 100.0
-    baseline: float = 42.0       # reset/start level (just below the band)
+    baseline: float = 20.0       # prepare-patient reset level (well below the band)
     band_low: float = 55.0       # lower tape (therapeutic window)
     band_high: float = 70.0      # upper tape
     critical_high: float = 80.0  # instant toxic loss

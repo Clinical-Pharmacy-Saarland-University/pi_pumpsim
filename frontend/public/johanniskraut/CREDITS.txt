@@ -1,0 +1,4 @@
+Johanniskraut story assets
+
+No external raster images are used in this story. The in-game tea, capsule, label,
+mechanism, and leak-finale visuals are built from local CSS and emoji text.

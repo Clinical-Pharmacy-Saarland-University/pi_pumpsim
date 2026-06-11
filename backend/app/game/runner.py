@@ -203,6 +203,22 @@ class LevelRunner:
             steps.append({"dir": "in", "speed": 1.0, "seconds": prime_s})
         self.run_sequence(steps, sync_level=self.ctrl.cfg.baseline)
 
+    def prime_to_baseline(self, prime_s: float) -> None:
+        """Prime-only init for a torso that's ALREADY empty (drained by hand): pump
+        IN to baseline and anchor the twin — the no-overpump variant of prepare().
+        Use when the operator has emptied the torso themselves. Mock shortcut: settle
+        at baseline + homed; real/sim: pump IN only (prime_s covers tube + baseline),
+        then snap. An assumption, not a measurement — if the torso wasn't empty it
+        overfills, so this is operator-asserted just like home/prepare are."""
+        if self.backend != "real" and not self.sim_active:
+            self.set_target(self.ctrl.cfg.baseline)
+            self.homed = True
+            return
+        steps: list[dict] = []
+        if prime_s > 0:
+            steps.append({"dir": "in", "speed": 1.0, "seconds": prime_s})
+        self.run_sequence(steps, sync_level=self.ctrl.cfg.baseline)
+
     def home_empty(self, empty_s: float, tube_prime_s: float = 0.0) -> None:
         """Overpump empty, re-prime the tube (pump IN the dead-space so the line is
         full to the torso entry while the torso stays at 0), then anchor the twin at

@@ -255,3 +255,43 @@ def test_sim_prepare_lands_exactly_on_baseline():
         r._tick()
     assert abs(r.sim_level - baseline) < 0.2  # torso fills to baseline, not baseline+dead-space
     assert r.homed is True
+
+
+# --- prime-only init (no-drain, for a hand-emptied torso) ------------------------
+def test_prime_only_anchors_baseline_without_draining():
+    # mock shortcut: declare baseline + homed, and NEVER queue an OUT (drain) step
+    r = _runner()
+    r.ctrl.level = 12.0
+    r.prime_to_baseline(prime_s=5.0)
+    assert r.homed is True
+    assert r.ctrl.target == r.ctrl.cfg.baseline
+    assert r._seq == []                # nothing queued on mock
+    assert r.pump.direction == "stop"  # no draining
+
+
+def test_prime_only_on_real_pumps_in_only_then_anchors_baseline():
+    # on real hardware prime-only runs a single IN step (no overpump-empty), then snaps
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="real")
+    r.ctrl.level = 0.0
+    r.prime_to_baseline(prime_s=5.0)
+    assert r.pump.direction == "in"          # priming, never draining
+    assert [s["dir"] for s in r._seq] == []  # just the one step, nothing queued after
+    assert r.homed is False                   # in transit
+    r._advance_seq()                          # finish -> anchor at baseline
+    assert r.homed is True and r.ctrl.level == r.ctrl.cfg.baseline
+
+
+def test_sim_prime_only_fills_empty_torso_to_baseline():
+    # with the sim on (rehearsal), prime-only fills a dry, hand-emptied torso to exactly
+    # baseline — the tube dead-space is absorbed first, just like prepare's prime step
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="mock", calibration=DBCAL)
+    r.simulate_start(0.0)   # hand-emptied: true level 0
+    r.sim_tube_units = 0.0  # ...with a dry line (prime covers tube + baseline)
+    baseline = r.ctrl.cfg.baseline
+    prime_ml = baseline / 100.0 * DBCAL["torso_volume_ml"]
+    prime_s = (prime_ml + DBCAL["dead_space_ml"]) / DBCAL["rate_in"]
+    r.prime_to_baseline(prime_s=prime_s)
+    for _ in range(900):
+        r._tick()
+    assert abs(r.sim_level - baseline) < 0.2
+    assert r.homed is True

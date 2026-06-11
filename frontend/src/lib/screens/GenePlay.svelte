@@ -1,184 +1,418 @@
 <script lang="ts">
-  // Self-contained v2 story „Drei Zwillinge, eine Pille" (DGI · Codein/CYP2D6).
-  // Unique mechanic = same-dose triptych: predict each genotype's outcome (sort into
-  // zu wenig / genau richtig / zu viel), then reveal all three side by side.
+  // Self-contained v2 story „Drei Körper, eine Pille" (DGI · Codein/CYP2D6).
+  // Blueprint screen on <PlayShell/> + the .pl-* kit. Signature mechanic: PREDICT-THEN-POUR —
+  // bet first (zu wenig/genau richtig/zu viel), then pour the IDENTICAL pill into ONE tank, ×3,
+  // with a body-swap reset between. The input is constant; the hidden variable is the body
+  // (the CYP2D6 gene). No on-screen vessel — the physical pump is the readout. The scanner beat
+  // draws the three PK morphine curves (same dose → three curves). Losses rebuilt via a manual
+  // $effect (auto-trip is engine-gated to PLAY_PHASES, which play2 is not).
   import { onMount } from 'svelte'
   import { t } from '../locale.svelte'
-  import { game, driveTo, retry, backToStories } from '../game.svelte'
-  import Backdrop from '../Backdrop.svelte'
-  import StarRating from '../StarRating.svelte'
-  import { GENE_TWINS, GENE_BINS, genePredictCorrect, GENE_OPTIONS, GENE_ULTRA_LEVEL, type GeneOption } from '../stories/gene'
-  import { stars as starsFor, DEFAULT_CFG, type Outcome } from '../flow'
+  import { game, driveTo, hold, backToStories } from '../game.svelte'
+  import PlayShell from '../PlayShell.svelte'
+  import WatchBody from '../WatchBody.svelte'
+  import EndScreen from '../EndScreen.svelte'
+  import {
+    GENE_BASELINE, GENE_A_LOW, GENE_C_HIGH, GENE_FINALE_OK, GENE_FINALE_WARN,
+    GENE_BODIES, GENE_BINS, GENE_PK_CURVES, GENE_TREAT_A, GENE_TREAT_C, GENE_CABINET,
+    genePredictGrade, geneProGrade, type GeneBin, type GeneOption,
+  } from '../stories/gene'
+  import { stars, type Outcome } from '../flow'
 
-  type Beat = 'briefing' | 'predict' | 'reveal' | 'mechanism' | 'strategy' | 'decided' | 'moving' | 'outcome'
+  type Beat = 'briefing' | 'pour' | 'scanner' | 'mechanism' | 'treatA' | 'treatC' | 'finale' | 'won' | 'outcome'
+  type PourSub = 'bet' | 'ready' | 'pouring' | 'read' | 'swap'
   let beat = $state<Beat>('briefing')
-  let assign = $state<Record<string, string | undefined>>({})
-  let predictPerfect = $state(false)
-  let chosen = $state<GeneOption | null>(null)
-  let tramadolTapped = $state(false)
-  let stratFb = $state<string | null>(null)
+  let outcome = $state<Outcome>('win')
+  let pumping = $state(false)
 
-  let allAssigned = $derived(GENE_TWINS.every((tw) => assign[tw.id] !== undefined))
-  let options = $derived(GENE_OPTIONS.filter((o) => game.ageGroup === 'adult' || !o.adultOnly))
-  let outcome = $derived<Outcome>((chosen?.result === 'over' ? 'over' : chosen?.result === 'under' ? 'under' : 'win'))
-  // clever: full for a perfect prediction, half otherwise. pro: lost if the tramadol trap was tapped.
-  let starCount = $derived(starsFor(outcome === 'win', predictPerfect ? 1 : 0.5, !tramadolTapped ? 1 : 0))
-  let outCls = $derived(outcome === 'win' ? 'good' : 'bad')
-  let decidedCls = $derived(chosen?.result === 'win' ? 'good' : 'bad')
+  // predict-then-pour
+  let pourIdx = $state(0)
+  let pourSub = $state<PourSub>('bet')
+  let bets = $state<Record<string, GeneBin | undefined>>({})
+  let showFact = $state(false) // dykC during C's long pour
 
-  const pct = (v: number) => (v / 100) * 100
-  const bandTop = (100 - DEFAULT_CFG.band_high) + '%'
-  const bandH = (DEFAULT_CFG.band_high - DEFAULT_CFG.band_low) + '%'
-  const twinCls = (lvl: number) => (lvl >= DEFAULT_CFG.band_low && lvl <= DEFAULT_CFG.band_high ? 'in' : lvl > DEFAULT_CFG.band_high ? 'over' : 'under')
+  // scanner
+  let revealed = $state(false)
 
-  onMount(() => driveTo(62, 8, () => {}))
+  // treat A / C
+  let aChosen = $state<GeneOption | null>(null)
+  let aMsg = $state<string | null>(null)
+  let cGiven = $state(false)
+  let cChosen = $state<GeneOption | null>(null)
+  let cMsg = $state<string | null>(null)
+  let resolved = $state(false)
 
-  function setBin(id: string, b: string) {
-    assign = { ...assign, [id]: b }
+  // finale
+  let selectedCard = $state<string | null>(null)
+  let applied = $state<Record<string, string | undefined>>({})
+  let finaleMsg = $state<string | null>(null)
+
+  let stumbles = $state(0)
+
+  let body = $derived(GENE_BODIES[pourIdx])
+  let aOptions = $derived(GENE_TREAT_A.filter((o) => game.ageGroup === 'adult' || !o.adultOnly))
+  let cOptions = $derived(GENE_TREAT_C.filter((o) => game.ageGroup === 'adult' || !o.adultOnly))
+  let cabinet = $derived(GENE_CABINET.filter((o) => game.ageGroup === 'adult' || !o.adultOnly))
+  let betMisses = $derived(GENE_BODIES.filter((b) => bets[b.id] && bets[b.id] !== b.truth).length)
+  let clever = $derived(genePredictGrade(betMisses))
+  let pro = $derived(geneProGrade(stumbles))
+  let starCount = $derived(stars(outcome === 'win', clever, pro))
+  let finaleDone = $derived(!!applied.A && !!applied.C)
+  let stepNum = $derived(
+    beat === 'briefing' ? 1
+    : beat === 'pour' ? pourIdx + 2
+    : beat === 'scanner' ? 5
+    : ['mechanism', 'treatA'].includes(beat) ? 6
+    : 7,
+  )
+
+  onMount(() => drive(GENE_BASELINE, 8)) // guaranteed low rest before the first bet
+
+  function drive(target: number, rate: number, then: () => void = () => {}) {
+    pumping = true
+    driveTo(target, rate, () => { pumping = false; then() })
   }
-  function confirmPredict() {
-    if (!allAssigned) return
-    predictPerfect = genePredictCorrect(assign as Record<string, string>)
-    beat = 'reveal'
-    driveTo(GENE_ULTRA_LEVEL, 4, () => {}) // the ultra-rapid twin is the danger
+
+  // manual over-trip during treatC (the live too-much-morphine moves cross 80)
+  $effect(() => {
+    if (beat !== 'treatC' || !cChosen || cChosen.result !== 'over' || resolved) return
+    const lv = game.level?.level
+    if (lv !== undefined && lv >= 80) { resolved = true; outcome = 'over'; beat = 'outcome' }
+  })
+
+  // ── predict-then-pour ──
+  function placeBet(bin: GeneBin) {
+    if (pumping) return
+    bets = { ...bets, [body.id]: bin }
+    pourSub = 'ready'
   }
-  function pick(o: GeneOption) {
-    if (o.result === 'retry') {
-      tramadolTapped = true
-      stratFb = o.feedbackKey
-      return
+  function pourPill() {
+    if (pumping) return
+    showFact = pourIdx === 2
+    pourSub = 'pouring'
+    drive(body.pour, 4, () => (pourSub = 'read'))
+  }
+  function pourNext() {
+    if (pumping) return
+    if (pourIdx < 2) {
+      pourSub = 'swap'
+      drive(GENE_BASELINE, 8, () => { pourIdx += 1; pourSub = 'bet' })
+    } else {
+      drive(GENE_BASELINE, 8, () => (beat = 'scanner'))
     }
-    chosen = o
-    beat = 'decided'
   }
-  function afterDecided() {
-    if (!chosen) return
-    beat = 'moving'
-    driveTo(chosen.target, 4, () => (beat = 'outcome'))
+
+  // ── mechanism → treat A (drive into the „zu tief" start) ──
+  function mechNext() {
+    if (pumping) return
+    drive(GENE_A_LOW, 8, () => (beat = 'treatA'))
+  }
+
+  // ── treat A (Poor Metabolizer) ──
+  function pickA(o: GeneOption) {
+    if (pumping) return
+    if (o.result === 'retry') { stumbles += 1; aMsg = o.feedbackKey; return }
+    aChosen = o; aMsg = o.feedbackKey
+    if (o.result === 'win') {
+      drive(62, 4, () => { beat = 'treatC'; cGiven = false; drive(GENE_BASELINE, 8) })
+    } else if (o.target !== undefined) {
+      drive(o.target, 4, () => { outcome = 'under'; beat = 'outcome' }) // dead still at 46 → under
+    } else {
+      pumping = true
+      hold(1400, () => { pumping = false; outcome = 'under'; beat = 'outcome' })
+    }
+  }
+
+  // ── treat C (Ultra-rapid, live) ──
+  function giveC() {
+    if (pumping || cGiven) return
+    cGiven = true
+    drive(GENE_C_HIGH, 4) // 40 → 78 live rise (the twist forms in front of the player)
+  }
+  function pickC(o: GeneOption) {
+    if (pumping) return
+    if (o.result === 'retry') { stumbles += 1; cMsg = o.feedbackKey; return }
+    cChosen = o; cMsg = o.feedbackKey; resolved = false
+    if (o.result === 'win') {
+      drive(62, 4, () => { if (!resolved) { resolved = true; beat = 'finale' } })
+    } else {
+      drive(o.target!, 4, () => { if (!resolved) { resolved = true; outcome = 'over'; beat = 'outcome' } })
+    }
+  }
+
+  // ── finale cabinet ──
+  function selectCard(id: string) { if (!pumping) selectedCard = id }
+  function applyTo(patient: 'A' | 'C') {
+    if (pumping || !selectedCard || applied[patient]) return
+    const card = GENE_CABINET.find((c) => c.id === selectedCard)!
+    if (card.safe) {
+      applied = { ...applied, [patient]: selectedCard }
+      finaleMsg = 'gene.finale.good'
+      selectedCard = null
+    } else {
+      stumbles += 1
+      finaleMsg = patient === 'C' ? 'gene.finale.warn' : 'gene.finale.bad'
+      selectedCard = null
+      if (patient === 'C') drive(GENE_FINALE_WARN, 6, () => drive(GENE_FINALE_OK, 4))
+    }
   }
 </script>
 
-<div class="play">
-  <Backdrop />
-  <button class="cancel" onclick={backToStories} aria-label={t('common.back')}>✕</button>
-  <div class="stage">
-    <main class="content">
-      {#key beat}
+<div class="root">
+  {#if beat === 'outcome'}
+    <EndScreen
+      {outcome}
+      titleKey={`gene.out.${outcome}.title`}
+      subKey={`gene.out.${outcome}.sub`}
+      storyTitleKey="story.gene.title"
+      score={starCount}
+      factKeys={outcome === 'win'
+        ? ['gene.out.dyk1', 'gene.out.dyk2']
+        : outcome === 'over'
+          ? ['gene.out.dyk.over', 'gene.out.dyk1']
+          : ['gene.out.dyk.under', 'gene.out.dyk1']}
+    />
+  {:else}
+    <PlayShell
+      color={game.story?.color ?? '#b794ff'}
+      kicker={t('story.gene.title')}
+      caseLine={t('gene.case')}
+      step={stepNum}
+      total={7}
+      onCancel={backToStories}
+    >
+      {#key beat + pourIdx + pourSub}
         <div class="beat">
           {#if beat === 'briefing'}
-            <div class="pill">{t('story.gene.title')}</div>
-            <h1>{t('gene.brief.patient')}</h1>
-            <p class="lead">{t('gene.brief.goal')}</p>
-            <button class="btn primary big" onclick={() => (beat = 'predict')}>{t('common.next')}</button>
-          {:else if beat === 'predict'}
-            <h2>{t('gene.predict.prompt')}</h2>
-            <div class="twins">
-              {#each GENE_TWINS as tw}
-                <div class="twin">
-                  <div class="face">{tw.badge}</div>
-                  <div class="tname">{t(tw.nameKey)}</div>
-                  <div class="binbtns">
-                    {#each GENE_BINS as b}
-                      <button class="binbtn" class:sel={assign[tw.id] === b} onclick={() => setBin(tw.id, b)}>{t('gene.bin.' + b)}</button>
+            <div class="scene">
+              <span class="pl-emoji">🦷</span>
+              <div class="kids">😀 😀 😀</div>
+              <h1 class="pl-h1">{t('gene.brief.patient')}</h1>
+              <p class="pl-lead">{t('gene.brief.goal')}</p>
+              <div class="actions">
+                <button class="pl-action" disabled={pumping} onclick={() => { beat = 'pour'; pourIdx = 0; pourSub = 'bet' }}>{t('gene.brief.go')}</button>
+              </div>
+            </div>
+
+          {:else if beat === 'pour'}
+            <div class="scene wide">
+              <div class="bodycard"><span class="bigemoji">🧒</span><b>{t(body.nameKey)}</b><span class="badge q">?</span></div>
+              {#if pourSub === 'bet'}
+                <h2 class="pl-h2">{t('gene.pour.bet')}</h2>
+                <div class="binrow">
+                  {#each GENE_BINS as bin}
+                    <button class="pl-opt bin" disabled={pumping} onclick={() => placeBet(bin)}>{t(`gene.bin.${bin}`)}</button>
+                  {/each}
+                </div>
+              {:else if pourSub === 'ready'}
+                <p class="pl-body">{t('gene.bin.' + bets[body.id])} — {t('gene.pour.bet')}</p>
+                <div class="actions">
+                  <button class="pl-action" disabled={pumping} onclick={pourPill}>{t('gene.pour.drop')}</button>
+                </div>
+              {:else if pourSub === 'pouring'}
+                <WatchBody text={t('gene.pour.watch')} tone="watch" />
+                {#if showFact}
+                  <div class="factcard pl-card"><span class="factkick">{t('gene.pour.dykC').startsWith('Wusstest') ? '' : ''}</span><p>{t('gene.pour.dykC')}</p></div>
+                {/if}
+              {:else if pourSub === 'read'}
+                <WatchBody text={t(body.pourReadKey)} tone={body.truth === 'high' ? 'rising' : body.truth === 'mid' ? 'good' : 'still'} />
+                <p class="chip {bets[body.id] === body.truth ? 'pl-good' : 'pl-warn'}">{bets[body.id] === body.truth ? t('gene.pour.hit') : t('gene.pour.miss')}</p>
+                <div class="actions">
+                  <button class="pl-action" disabled={pumping} onclick={pourNext}>{t('gene.pour.next')}</button>
+                </div>
+              {:else if pourSub === 'swap'}
+                <WatchBody text={t('gene.pour.swap')} tone="falling" />
+              {/if}
+            </div>
+
+          {:else if beat === 'scanner'}
+            <div class="task">
+              <h2 class="pl-h2 center">{t('gene.scan.prompt')}</h2>
+              <div class="bodies">
+                {#each GENE_BODIES as b}
+                  <div class="bodycard small"><span class="bigemoji">🧒</span><b>{t(b.nameKey)}</b>
+                    <span class="badge" class:on={revealed}>{revealed ? t(b.badgeKey) : '?'}</span>
+                  </div>
+                {/each}
+              </div>
+              {#if revealed}
+                <div class="curvewrap pl-card">
+                  <div class="curvehead"><b>{t('gene.scan.curveTitle')}</b><span>{t('gene.scan.curveSub')}</span></div>
+                  <svg class="pkchart" viewBox="0 0 360 180" aria-hidden="true">
+                    <rect x="8" y="56" width="344" height="40" class="pkband" />
+                    <text x="13" y="50" class="pklabel">grüner Bereich</text>
+                    {#each GENE_PK_CURVES as cv}
+                      <path d={cv.d} class="pkcurve c{cv.id}" />
                     {/each}
+                  </svg>
+                  <div class="legend">
+                    <span class="lg cA">🐢 {t('gene.scan.A').split(':')[0]}</span>
+                    <span class="lg cB">✅ {t('gene.scan.B').split(':')[0]}</span>
+                    <span class="lg cC">🚀 {t('gene.scan.C').split(':')[0]}</span>
                   </div>
                 </div>
-              {/each}
-            </div>
-            <button class="btn primary big" onclick={confirmPredict} disabled={!allAssigned}>{t('gene.predict.confirm')}</button>
-          {:else if beat === 'reveal'}
-            <h2>{t('gene.reveal.title')}</h2>
-            <div class="bars">
-              {#each GENE_TWINS as tw}
-                <div class="minibar {twinCls(tw.level)}">
-                  <div class="bar">
-                    <div class="band" style="top:{bandTop};height:{bandH}"></div>
-                    <div class="fill" style="height:{pct(tw.level)}%"></div>
-                  </div>
-                  <div class="bface">{tw.badge}</div>
-                  <div class="blabel">{t('gene.bin.' + tw.bin)}</div>
+                <div class="actions">
+                  <button class="pl-action" onclick={() => (beat = 'mechanism')}>{t('gene.scan.next')}</button>
                 </div>
-              {/each}
+              {:else}
+                <div class="actions">
+                  <button class="pl-action" onclick={() => (revealed = true)}>{t('gene.scan.all')}</button>
+                </div>
+              {/if}
             </div>
-            <p class="lead">{t('gene.reveal.sub')}</p>
-            <button class="btn primary big" onclick={() => (beat = 'mechanism')}>{t('common.next')}</button>
+
           {:else if beat === 'mechanism'}
-            <div class="emoji">💡</div>
-            <p class="lead">{t('gene.mech')}</p>
-            <button class="btn primary big" onclick={() => (beat = 'strategy')}>{t('common.next')}</button>
-          {:else if beat === 'strategy'}
-            <h2>{t('gene.strat.prompt')}</h2>
-            <div class="opts">
-              {#each options as o}
-                <button class="opt" onclick={() => pick(o)}>{t(o.labelKey)}</button>
-              {/each}
+            <div class="scene wide">
+              <h2 class="pl-h2">{t('gene.mech.prompt')}</h2>
+              <div class="mechcards">
+                <div class="mechcard turbo"><b>🚀 {t('gene.body.C')}</b><p>{t('gene.mech.C')}</p></div>
+                <div class="mechcard"><b>🐢 {t('gene.body.A')}</b><p>{t('gene.mech.A')}</p></div>
+                <div class="mechcard"><b>✅ {t('gene.body.B')}</b><p>{t('gene.mech.B')}</p></div>
+              </div>
+              <div class="actions">
+                <button class="pl-action" disabled={pumping} onclick={mechNext}>{t('gene.mech.next')}</button>
+              </div>
             </div>
-            {#if stratFb}<p class="fb bad">{t(stratFb)}</p>{/if}
-          {:else if beat === 'decided' && chosen}
-            <div class="fb {decidedCls}">{t(chosen.feedbackKey)}</div>
-            <button class="btn primary big" onclick={afterDecided}>{t('common.next')}</button>
-          {:else if beat === 'moving'}
-            <div class="dots">…</div>
-          {:else if beat === 'outcome'}
-            <h1 class={outCls}>{t('gene.out.' + outcome + '.title')}</h1>
-            <p class="lead">{t('gene.out.' + outcome + '.sub')}</p>
-            {#if outcome === 'win'}<StarRating score={starCount} />{/if}
-            <div class="dyk">
-              <span class="dlbl">{t('out.dyk')}</span>
-              <p>{t('gene.out.dyk1')}</p>
-              {#if outcome === 'win'}<p class="second">{t('gene.out.dyk2')}</p>{/if}
+
+          {:else if beat === 'treatA'}
+            <div class="task">
+              <h2 class="pl-h2 center">{t('gene.treatA.prompt')}</h2>
+              {#if aChosen?.result === 'win'}
+                <WatchBody text={t(aChosen.feedbackKey)} tone="good" />
+              {:else}
+                <div class="optcol">
+                  {#each aOptions as o}
+                    <button class="pl-opt" disabled={pumping} onclick={() => pickA(o)}>{t(o.labelKey)}</button>
+                  {/each}
+                </div>
+                {#if aMsg}<p class="fb pl-warn">{t(aMsg)}</p>{/if}
+              {/if}
             </div>
-            <div class="actions">
-              <button class="btn" onclick={backToStories}>← {t('stories.title')}</button>
-              <button class="btn primary" onclick={retry}>{t('common.retry')}</button>
+
+          {:else if beat === 'treatC'}
+            <div class="task">
+              {#if !cGiven}
+                <h2 class="pl-h2 center">{t('gene.treatC.intro')}</h2>
+                <div class="actions">
+                  <button class="pl-action" disabled={pumping} onclick={giveC}>{t('gene.treatC.give')}</button>
+                </div>
+              {:else if pumping && !cChosen}
+                <WatchBody text={t('gene.treatC.rising')} tone="rising" />
+              {:else if !cChosen}
+                <h2 class="pl-h2 center">{t('gene.treatC.prompt')}</h2>
+                <div class="optcol">
+                  {#each cOptions as o}
+                    <button class="pl-opt" disabled={pumping} onclick={() => pickC(o)}>{t(o.labelKey)}</button>
+                  {/each}
+                </div>
+                {#if cMsg}<p class="fb pl-warn">{t(cMsg)}</p>{/if}
+              {:else}
+                <WatchBody text={t(cMsg ?? 'gene.treatC.fb.switch')} tone={cChosen.result === 'win' ? 'falling' : 'rising'} />
+                {#if cChosen.result !== 'win'}<p class="fb pl-bad">{t(cChosen.feedbackKey)}</p>{/if}
+              {/if}
+            </div>
+
+          {:else if beat === 'finale'}
+            <div class="task">
+              <h2 class="pl-h2 center">{t('gene.finale.prompt')}</h2>
+              <div class="slots">
+                {#each [['A', 'gene.body.A'], ['C', 'gene.body.C']] as [pid, nameKey]}
+                  <button class="slot" class:done={applied[pid]} disabled={pumping || !!applied[pid]} onclick={() => applyTo(pid as 'A' | 'C')}>
+                    <span class="bigemoji">🧒</span><b>{t(nameKey)}</b>
+                    <small>{applied[pid] ? t('gene.finale.applied') : t('gene.finale.pickFor')}</small>
+                  </button>
+                {/each}
+              </div>
+              <div class="cabinet">
+                {#each cabinet as c}
+                  <button class="card" class:sel={selectedCard === c.id} class:safe={c.safe} disabled={pumping} onclick={() => selectCard(c.id)}>{t(c.labelKey)}</button>
+                {/each}
+              </div>
+              {#if finaleMsg}<p class="fb {finaleMsg === 'gene.finale.good' ? 'pl-good' : 'pl-warn'}">{t(finaleMsg)}</p>{/if}
+              {#if finaleDone}
+                <div class="actions">
+                  <button class="pl-action" disabled={pumping} onclick={() => (beat = 'won')}>{t('gene.finale.next')}</button>
+                </div>
+              {/if}
+            </div>
+
+          {:else if beat === 'won'}
+            <div class="scene">
+              <h2 class="pl-h2 pl-good">{t('gene.won.title')}</h2>
+              <p class="pl-lead">{t('gene.won.peek')}</p>
+              <div class="actions">
+                <button class="pl-action" onclick={() => (beat = 'outcome')}>{t('common.next')}</button>
+              </div>
             </div>
           {/if}
         </div>
       {/key}
-    </main>
-  </div>
+    </PlayShell>
+  {/if}
 </div>
 
 <style>
-  .play { position: relative; height: 100%; overflow: hidden; }
-  .cancel { position: absolute; top: 16px; inset-inline-start: 16px; z-index: 3; width: 46px; height: 46px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--dim); font-size: 18px; font-weight: 700; }
-  .stage { position: relative; z-index: 1; height: 100%; display: grid; grid-template-columns: 1fr; align-items: center; padding: 28px clamp(36px, 5vw, 80px); }
-  .content { display: flex; align-items: center; justify-content: center; min-width: 0; height: 100%; }
-  .beat { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: 100%; max-width: 760px; animation: beatin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
-  .pill { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 18px; font-size: 14px; font-weight: 700; color: var(--spm-cyan-bright); }
-  h1 { font-size: clamp(30px, 3.6vw, 46px); font-weight: 900; line-height: 1.1; }
-  h1.good { color: var(--green); } h1.bad { color: var(--toxic); }
-  h2 { font-size: clamp(23px, 2.5vw, 31px); font-weight: 800; line-height: 1.2; }
-  .lead { font-size: clamp(18px, 2vw, 25px); line-height: 1.5; }
-  .emoji { font-size: 72px; }
-  .twins { display: flex; gap: 14px; width: 100%; }
-  .twin { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 10px; border: 1.5px solid var(--border); border-radius: 16px; background: var(--surface); }
-  .face { font-size: 44px; }
-  .tname { font-size: 14px; font-weight: 700; color: var(--dim); text-align: center; min-height: 2.6em; }
-  .binbtns { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-  .binbtn { border: 1.5px solid var(--border); background: var(--surface2); border-radius: 10px; padding: 9px 6px; font-size: 13px; font-weight: 700; }
-  .binbtn.sel { border-color: var(--spm-cyan); background: rgba(0, 190, 202, 0.18); color: var(--spm-cyan-bright); }
-  .bars { display: flex; gap: 24px; width: 100%; justify-content: center; }
-  .minibar { display: flex; flex-direction: column; align-items: center; gap: 6px; --c: var(--green); }
-  .minibar.in { --c: var(--green); } .minibar.over { --c: var(--toxic); } .minibar.under { --c: var(--grape); }
-  .bar { position: relative; width: 54px; height: 170px; border-radius: 27px; border: 2px solid var(--border); overflow: hidden; background: rgba(255,255,255,0.04); box-shadow: 0 0 18px color-mix(in srgb, var(--c) 40%, transparent); }
-  .band { position: absolute; left: 0; right: 0; background: var(--green-soft); border-top: 1px dashed var(--green-line); border-bottom: 1px dashed var(--green-line); }
-  .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--c); transition: height 0.4s ease; }
-  .bface { font-size: 30px; }
-  .blabel { font-size: 13px; font-weight: 800; color: var(--c); }
-  .opts { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-  .opt { text-align: start; background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 16px 22px; font-size: clamp(16px, 1.7vw, 21px); font-weight: 700; }
-  .opt:active { transform: scale(0.98); border-color: var(--spm-cyan); background: var(--surface2); }
-  .fb { font-size: clamp(18px, 2vw, 26px); font-weight: 800; line-height: 1.4; }
-  .fb.good { color: var(--green); } .fb.bad { color: var(--toxic); }
-  .dots { font-size: 56px; color: var(--dim); animation: pulsedots 1s ease-in-out infinite; }
-  .dyk { max-width: 680px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 22px; }
-  .dlbl { font-size: 13px; color: var(--grape); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
-  .dyk p { margin-top: 6px; font-size: 17px; line-height: 1.5; }
-  .dyk .second { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--dim); }
-  .actions { display: flex; gap: 12px; margin-top: 6px; }
-  .btn.big { padding: 18px 44px; font-size: 22px; border-radius: 18px; }
-  @keyframes beatin { from { opacity: 0; transform: translateY(20px); } }
-  @keyframes pulsedots { 50% { opacity: 0.3; } }
-  @media (prefers-reduced-motion: reduce) { .beat { animation: none; } }
+  .root { position: relative; height: 100%; }
+  .beat { height: 100%; display: grid; align-content: center; justify-items: center; gap: var(--sp-4); animation: beatin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+  .scene { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); max-width: 880px; text-align: center; }
+  .scene.wide { max-width: 980px; width: 100%; }
+  .task { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); width: 100%; }
+  .center { text-align: center; }
+  .actions { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; }
+  .fb { font-size: var(--fs-h2); font-weight: 800; line-height: 1.3; max-width: 900px; text-align: center; }
+  .kids { font-size: 40px; letter-spacing: 8px; }
+
+  .factcard { max-width: 680px; text-align: center; animation: factin 0.4s ease both; }
+  .factcard p { font-size: var(--fs-lead); line-height: 1.45; }
+
+  .bodycard { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: var(--sp-3) var(--sp-5); border: 2px solid color-mix(in srgb, var(--story) 50%, transparent); border-radius: var(--r-card); background: color-mix(in srgb, var(--story) 12%, var(--surface)); }
+  .bodycard.small { padding: var(--sp-2) var(--sp-3); }
+  .bigemoji { font-size: 54px; line-height: 1; }
+  .bodycard b { font-size: var(--fs-h2); font-weight: 800; }
+  .badge { font-size: var(--fs-small); font-weight: 800; color: var(--dim); padding: 4px 12px; border-radius: var(--r-pill); border: 1px solid var(--border); }
+  .badge.q { font-size: var(--fs-h2); }
+  .badge.on { color: var(--text); border-color: color-mix(in srgb, var(--story) 60%, transparent); }
+
+  .binrow { display: flex; gap: var(--sp-2); flex-wrap: wrap; justify-content: center; }
+  .bin { min-width: 200px; text-align: center; font-size: var(--fs-lead); }
+  .optcol { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; max-width: 720px; }
+  .chip { font-size: var(--fs-lead); font-weight: 800; }
+
+  .bodies { display: flex; gap: var(--sp-3); flex-wrap: wrap; justify-content: center; }
+
+  .curvewrap { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: var(--sp-2); }
+  .curvehead { text-align: center; }
+  .curvehead b { font-size: var(--fs-lead); font-weight: 800; display: block; }
+  .curvehead span { font-size: var(--fs-small); color: var(--dim); }
+  .pkchart { width: 100%; height: auto; background: rgba(255, 255, 255, 0.03); border-radius: var(--r-card); }
+  .pkband { fill: color-mix(in srgb, var(--green) 22%, transparent); }
+  .pklabel { fill: var(--green); font-size: 11px; font-weight: 800; }
+  .pkcurve { fill: none; stroke-width: 3; }
+  .pkcurve.cA { stroke: var(--grape); }
+  .pkcurve.cB { stroke: var(--green); }
+  .pkcurve.cC { stroke: var(--toxic); }
+  .legend { display: flex; gap: var(--sp-3); justify-content: center; flex-wrap: wrap; font-size: var(--fs-micro); font-weight: 800; }
+  .lg.cA { color: var(--grape); }
+  .lg.cB { color: var(--green); }
+  .lg.cC { color: var(--toxic); }
+
+  .mechcards { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; max-width: 860px; }
+  .mechcard { display: flex; flex-direction: column; gap: 4px; padding: var(--sp-3); border: 1.5px solid var(--border); border-radius: var(--r-card); background: var(--surface); text-align: start; }
+  .mechcard.turbo { border-color: color-mix(in srgb, var(--toxic) 55%, transparent); background: color-mix(in srgb, var(--toxic) 10%, var(--surface)); }
+  .mechcard b { font-size: var(--fs-lead); font-weight: 800; }
+  .mechcard p { font-size: var(--fs-body); color: var(--text); line-height: 1.35; }
+
+  .slots { display: flex; gap: var(--sp-3); justify-content: center; }
+  .slot { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 180px; min-height: 130px; padding: var(--sp-3); border: 2px dashed var(--border); border-radius: var(--r-card); background: var(--surface); color: var(--text); }
+  .slot.done { border-style: solid; border-color: var(--green); background: color-mix(in srgb, var(--green) 12%, var(--surface)); }
+  .slot b { font-size: var(--fs-body); font-weight: 800; }
+  .slot small { font-size: var(--fs-micro); font-weight: 800; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .cabinet { display: flex; gap: var(--sp-2); flex-wrap: wrap; justify-content: center; max-width: 860px; }
+  .card { padding: 14px 22px; border: 1.5px solid var(--border); border-radius: var(--r-pill); background: var(--surface); color: var(--text); font-size: var(--fs-body); font-weight: 800; }
+  .card.sel { border-color: var(--spm-cyan); box-shadow: 0 0 0 2px var(--spm-cyan); }
+  .card:active:not(:disabled) { transform: scale(0.97); }
+
+  @keyframes beatin { from { opacity: 0; transform: translateY(18px); } }
+  @keyframes factin { from { opacity: 0; transform: translateY(8px); } }
+  @media (prefers-reduced-motion: reduce) { .beat, .factcard { animation: none; } }
 </style>

@@ -1,6 +1,6 @@
-# CLAUDE.md — pi_pumpsim / "SafePolyMed"
+# pi_pumpsim / "SafePolyMed"
 
-Orientation for anyone (human or Claude) working on this repo. For the deep game
+Orientation for anyone (human or Codex) working on this repo. For the deep game
 design see [`docs/game-design.md`](docs/game-design.md) (current framework = **§19**, v0.6); for
 the Pi/deploy details see [`deploy/README.md`](deploy/README.md).
 
@@ -8,8 +8,8 @@ the Pi/deploy details see [`deploy/README.md`](deploy/README.md).
 
 ## What this is
 
-A touchscreen **"game"** for a university *Tag der offenen Tür* (open day), theme
-**SafePolyMed** — *safe polymedication*: drug–drug (DDI), food–drug (FDI) and drug–gene
+A touchscreen **"game"** for a university _Tag der offenen Tür_ (open day), theme
+**SafePolyMed** — _safe polymedication_: drug–drug (DDI), food–drug (FDI) and drug–gene
 (DGI) interactions. A **peristaltic pump** (Raspberry Pi + IBT-2 H-bridge) fills a
 translucent **3D-printed torso** (~2–3 L) with dyed water; the water level = the drug
 concentration. A **fixed taped band** on the torso = the therapeutic window. The player
@@ -27,7 +27,7 @@ fall back to German).
 - **Pump works on real hardware** (IBT-2, hardware PWM, VCC **3.3 V**): `RealPump`, an
   on-screen **admin** (triple-tap the logo: jog IN/OUT, timed runs, live telemetry,
   Entleeren/überpumpen + Kalibrierter Reset) and a **guided calibration wizard** are done.
-  Remaining: run calibration on the real torso + a level→pump model-follower; see *Open work*.
+  Remaining: run calibration on the real torso + a level→pump model-follower; see _Open work_.
   (Hardware saga: original driver dead, 1st of the replacement 2-pack bad, and VCC had to be
   **3.3 V not 5 V** — the 2nd unit on 3.3 V works.)
 - Repo: **public** at `github.com/Clinical-Pharmacy-Saarland-University/pi_pumpsim`.
@@ -61,7 +61,7 @@ with **no code change** (just an env var):
 
 - **Fixed therapeutic band** (same every story). The drug level sits in the band; an
   **interaction** (e.g. grapefruit) makes it **slowly drift** toward a danger line; the
-  player must pick the right **decision** to stop it. *The slow pump is the suspense.*
+  player must pick the right **decision** to stop it. _The slow pump is the suspense._
 - **You can lose**: end over the band = toxic, under = ineffective.
 - **Hybrid event pool**: a story draws & shuffles its events (+ a harmless "distractor"
   like an apple, to teach discernment) → replayable.
@@ -138,7 +138,7 @@ just tag 0.0.1-alpha  # write VERSION, commit, annotated tag v0.0.1-alpha + push
   Python 3.13**. Host `pumpsim.local`, user `dose`. SSH key alias `pumpsim`. **`sudo`
   needs a password** (can't run privileged steps over SSH non-interactively).
 - **Display**: official **Touch Display 2** (720×1280 portrait), used **landscape**.
-  Rotation is done in the compositor (**sway** `output * transform 90`), *not* the
+  Rotation is done in the compositor (**sway** `output * transform 90`), _not_ the
   kernel — `cage` couldn't rotate, so the kiosk uses **sway**.
 - **Pump driver = IBT-2 (BTS7960) H-bridge.** Pins (BCM/physical, with cable colours):
   RPWM=GPIO12/p32 🟢 · LPWM=GPIO13/p33 ⚪ · R_EN=GPIO23/p16 🔵 · L_EN=GPIO24/p18 🟡 ·

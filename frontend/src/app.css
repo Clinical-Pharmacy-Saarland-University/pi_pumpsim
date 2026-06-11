@@ -44,6 +44,27 @@
   --spm-cyan-bright: #28e6e0;
   --spm-ink: #eaf2ff;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+
+  /* ── Base style for the story screens (the "play" kit). Fixed px on purpose:
+     the whole .pi frame is transform-scaled to the display, so px stay uniform
+     and every story shares ONE type scale + spacing rhythm. ── */
+  --fs-display: 50px; /* outcome / hero */
+  --fs-h1: 38px;      /* beat headline (patient, prompt) */
+  --fs-h2: 27px;      /* section prompt */
+  --fs-lead: 22px;    /* lead paragraph */
+  --fs-body: 18px;    /* body / option text */
+  --fs-small: 15px;   /* captions */
+  --fs-micro: 12px;   /* kicker / credit */
+  --sp-1: 8px;
+  --sp-2: 14px;
+  --sp-3: 20px;
+  --sp-4: 28px;
+  --sp-5: 40px;
+  --sp-6: 56px;
+  --r-card: 18px;
+  --r-pill: 999px;
+  --story: var(--spm-cyan); /* per-story identity colour; PlayShell overrides it */
+
   font-family: 'Inter', 'Noto Sans Arabic', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
     Roboto, sans-serif;
 }
@@ -148,4 +169,124 @@ button {
   background: linear-gradient(135deg, var(--water-top), var(--water-bot));
   border: none;
   box-shadow: 0 14px 40px rgba(76, 201, 240, 0.32);
+}
+
+/* ═══ The shared "play" element kit — one consistent base style for every story.
+   Components compose these (.pl-h1 / .pl-lead / .pl-action / .pl-opt / .pl-card …)
+   so headings, body text, buttons and cards look identical across all six. ═══ */
+.pl-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  align-self: start;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--story) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--story) 45%, transparent);
+  color: color-mix(in srgb, var(--story) 70%, var(--text));
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.pl-h1 {
+  font-size: var(--fs-h1);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: -0.4px;
+}
+.pl-h2 {
+  font-size: var(--fs-h2);
+  font-weight: 800;
+  line-height: 1.18;
+  letter-spacing: -0.2px;
+}
+.pl-lead {
+  font-size: var(--fs-lead);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text);
+}
+.pl-body {
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--dim);
+}
+.pl-emoji {
+  font-size: 64px;
+  line-height: 1;
+}
+
+/* primary action — big, touch-safe, story-tinted. Disabled while the pump moves. */
+.pl-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 66px;
+  padding: 0 40px;
+  border-radius: var(--r-card);
+  background: linear-gradient(135deg, var(--spm-cyan), var(--water-bot));
+  color: #03202a;
+  font-size: 21px;
+  font-weight: 800;
+  box-shadow: 0 14px 38px color-mix(in srgb, var(--spm-cyan) 30%, transparent);
+  transition: transform 0.06s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+.pl-action.ghost {
+  background: var(--surface2);
+  color: var(--text);
+  box-shadow: none;
+  border: 1px solid var(--border);
+}
+.pl-action:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.pl-action:disabled {
+  opacity: 0.5;
+  filter: saturate(0.6);
+  cursor: default;
+}
+
+/* choice / option button — left-aligned, full-width in a column */
+.pl-opt {
+  display: block;
+  width: 100%;
+  text-align: start;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 20px 24px;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.3;
+  transition: transform 0.08s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.pl-opt:active:not(:disabled) {
+  transform: scale(0.985);
+  border-color: var(--spm-cyan);
+  background: var(--surface2);
+}
+.pl-opt:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* surface card (case facts, info panels) */
+.pl-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+/* feedback colours — shared semantics across stories */
+.pl-good {
+  color: var(--green);
+}
+.pl-warn {
+  color: var(--grape);
+}
+.pl-bad {
+  color: var(--toxic);
 }

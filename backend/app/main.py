@@ -178,6 +178,17 @@ def prepare_torso() -> dict:
     return {"ok": True, **plan}
 
 
+@app.post("/api/level/prime")
+def prime_torso() -> dict:
+    """Prime-only init: assume the torso was emptied BY HAND, skip the overpump-empty
+    step, and just prime to baseline + anchor the twin. The no-drain variant of
+    /prepare for when the operator drains the torso manually. Mock settles the twin
+    at baseline."""
+    plan = _prepare_plan()
+    _runner().prime_to_baseline(plan["prime_s"])
+    return {"ok": True, **plan}
+
+
 class GotoRequest(BaseModel):
     level: float = Field(ge=0, le=100)
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from './locale.svelte'
-  import { retry, backToStories } from './game.svelte'
+  import { retry, backToStories, backToStart, preHome } from './game.svelte'
   import Backdrop from './Backdrop.svelte'
   import EndFx from './EndFx.svelte'
   import StarRating from './StarRating.svelte'
@@ -18,6 +18,7 @@
     params = {},
     onBack = backToStories,
     onRetry = retry,
+    onIdle = backToStart,
   }: {
     outcome: OutcomeKind
     titleKey: string
@@ -28,13 +29,62 @@
     params?: Params
     onBack?: () => void
     onRetry?: () => void
+    onIdle?: () => void
   } = $props()
 
   let tone = $derived(outcome === 'win' ? 'good' : outcome === 'under' ? 'warn' : 'bad')
   let markGlyph = $derived(outcome === 'win' ? '✓' : outcome === 'under' ? '↓' : '!')
   let fx = $derived(outcome === 'win' ? ('confetti' as const) : outcome === 'over' ? ('siren' as const) : ('sink' as const))
+
+  // Kiosk idle guard: visitors walk away from the outcome screen mid-celebration.
+  // After IDLE_S without a touch, ask "still there?" and count down ASK_S; any tap
+  // anywhere keeps the screen (e.g. showing parents the stars), silence = onIdle()
+  // — resets all the way to the home screen so the next visitor starts fresh.
+  const IDLE_S = 45
+  const ASK_S = 15
+  let askLeft = $state(-1) // -1 = prompt hidden, otherwise seconds until auto-back
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
+  let askTick: ReturnType<typeof setInterval> | undefined
+
+  function armIdle() {
+    clearTimeout(idleTimer)
+    clearInterval(askTick)
+    askLeft = -1
+    idleTimer = setTimeout(() => {
+      askLeft = ASK_S
+      askTick = setInterval(() => {
+        askLeft -= 1
+        if (askLeft <= 0) {
+          clearInterval(askTick)
+          onIdle()
+        }
+      }, 1000)
+    }, IDLE_S * 1000)
+  }
+
+  $effect(() => {
+    armIdle()
+    return () => {
+      clearTimeout(idleTimer)
+      clearInterval(askTick)
+    }
+  })
+
+  // Overlap the slow real-hardware re-home (~77s: empty → prime to baseline) with
+  // the time the player reads their result, so the next run starts (near-)instantly.
+  // 0 = start the moment the outcome appears (the physical tank drains while the
+  // on-screen result/stars stay up); bump to e.g. 8000 to hold the result on the
+  // tank for a beat first. On mock this is instant and harmless.
+  const PREHOME_GRACE_MS = 0
+  $effect(() => {
+    const id = setTimeout(preHome, PREHOME_GRACE_MS)
+    return () => clearTimeout(id)
+  })
   let titleText = $derived(t(titleKey, params).replace(' …', '\u00a0…'))
 </script>
+
+<!-- any touch anywhere counts as activity (bubbles up from every screen element) -->
+<svelte:window onpointerdown={armIdle} />
 
 <div class="end">
   <Backdrop />
@@ -82,6 +132,20 @@
       </div>
     </section>
   </main>
+
+  {#if askLeft >= 0}
+    <div class="idle-ask" role="alertdialog" aria-labelledby="idle-title">
+      <div class="card">
+        <div class="wave" aria-hidden="true">👋</div>
+        <h2 id="idle-title">{t('out.idle.title')}</h2>
+        <p>{t('out.idle.sub', { s: askLeft })}</p>
+        <div class="bar" aria-hidden="true">
+          <span style="width:{(askLeft / ASK_S) * 100}%"></span>
+        </div>
+        <button class="btn primary stay" onclick={armIdle}>{t('out.idle.stay')}</button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -298,6 +362,87 @@
     box-shadow: 0 18px 46px rgba(76, 201, 240, 0.36);
   }
 
+  .idle-ask {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    background: rgba(5, 8, 16, 0.72);
+    animation: idleFade 0.25s ease both;
+  }
+  .idle-ask .card {
+    display: grid;
+    justify-items: center;
+    gap: 14px;
+    width: min(580px, 86%);
+    padding: 32px 40px 28px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: radial-gradient(120% 140% at 50% -20%, var(--bg1), var(--bg0));
+    box-shadow: var(--shadow);
+    text-align: center;
+    animation: idlePop 0.3s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+  .wave {
+    font-size: 52px;
+    line-height: 1;
+    transform-origin: 70% 80%;
+    animation: wave 1.1s ease-in-out infinite;
+  }
+  .idle-ask h2 {
+    font-size: 36px;
+    font-weight: 950;
+  }
+  .idle-ask p {
+    color: var(--text);
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .bar {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+  }
+  .bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--water-top), var(--spm-cyan));
+    transition: width 1s linear;
+  }
+  .idle-ask .stay {
+    min-height: 64px;
+    margin-top: 4px;
+    padding: 14px 40px;
+    border-radius: 12px;
+    font-size: 22px;
+    font-weight: 900;
+  }
+
+  @keyframes idleFade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes idlePop {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+  }
+  @keyframes wave {
+    0%,
+    100% {
+      transform: rotate(-12deg);
+    }
+    50% {
+      transform: rotate(16deg);
+    }
+  }
+
   @keyframes enter {
     from {
       opacity: 0;
@@ -313,7 +458,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .board,
-    .facts p {
+    .facts p,
+    .wave {
       animation: none;
     }
   }

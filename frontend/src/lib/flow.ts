@@ -9,12 +9,27 @@ export interface LevelCfg {
   baseline: number
 }
 
+// ── THE single source of truth for the torso level model (0–100) ──────────────
+// These exact values are TAPED on the physical torso (the green band + the two red
+// lines) and define where the pump is PREPARED before every scenario. Every story
+// imports `LEVELS` instead of hardcoding its own start/dose/band. Change them HERE
+// and in the backend `LevelConfig` (backend/app/game/controller.py) TOGETHER — the
+// two must always match, because the backend drives the real pump and the marks.
+export const LEVELS = {
+  start: 20, // prepare-patient: torso reset level, well below the band (patient ungeschützt)
+  bandLow: 55, // lower green tape — start of the therapeutic window
+  bandHigh: 70, // upper green tape — end of the therapeutic window
+  dose: 62, // a correct standard dose lands here (inside the band)
+  critLow: 35, // lower red line — too little (ineffective / under)
+  critHigh: 80, // upper red line — too much (toxic / over)
+} as const
+
 export const DEFAULT_CFG: LevelCfg = {
-  band_low: 55,
-  band_high: 70,
-  critical_high: 80,
-  critical_low: 35,
-  baseline: 40,
+  band_low: LEVELS.bandLow,
+  band_high: LEVELS.bandHigh,
+  critical_high: LEVELS.critHigh,
+  critical_low: LEVELS.critLow,
+  baseline: LEVELS.start,
 }
 
 export type Outcome = 'win' | 'over' | 'under'
@@ -39,14 +54,17 @@ export function stars(win: boolean, clever: number, pro: number): number {
 
 /**
  * Locale key for the rank TITLE shown next to the stars, from a star score.
- * Snaps to the defined rungs (loss=0, then 1.0/1.5/2.0/2.5/3.0 → ×10). t()
- * resolves the age register (kid vs. adult) on top.
+ * 0.5-star wins deliberately have no named rank; callers can hide the title via
+ * hasRankTitle(). Losses use rank.0 explicitly.
  */
 export function rankKey(score: number): string {
   const tenths = Math.max(0, Math.min(30, Math.round(score * 10)))
-  const rung =
-    tenths === 0 ? 0 : tenths <= 10 ? 10 : tenths <= 15 ? 15 : tenths <= 20 ? 20 : tenths <= 25 ? 25 : 30
+  const rung = tenths < 10 ? 0 : tenths <= 10 ? 10 : tenths <= 15 ? 15 : tenths <= 20 ? 20 : tenths <= 25 ? 25 : 30
   return `rank.${rung}`
+}
+
+export function hasRankTitle(score: number): boolean {
+  return Math.round(score * 10) >= 10
 }
 
 /** Format a star score for display: German decimal comma, trailing ".0" dropped. */

@@ -1,141 +1,407 @@
 <script lang="ts">
-  // Self-contained v2 story „Das Teeküchen-Regal" (Induktion · Johanniskraut × Ciclosporin).
-  // Unique mechanic = real-time leak-defense: the transplant's protection drains while the
-  // player must find + tap the right fix („Johanniskraut absetzen") among decoys before the
-  // level hits the rejection floor. play2 phase ⇒ we own the win/lose (an $effect watches level).
+  // Self-contained v2 story „Das pflanzliche Leck" (Induktion · Johanniskraut × Ciclosporin).
+  // Blueprint screen on <PlayShell/> + the .pl-* kit. Signature mechanic: READ-A-DELAYED-LEAK &
+  // BACK-DATE — investigate a FIXED week (history, not authored), read the delayed downward leak
+  // on the body, and blame the QUIET day the tea started (Dienstag = a true no-move) rather than
+  // the day the water visibly crashed; then stop the leak live before the Schutz-Spiegel falls
+  // under the green window. DOWN ONLY — no overdose path. No on-screen meter/chart. The finale
+  // loss is a component $effect (auto-trip is engine-gated to PLAY_PHASES, which play2 is not).
   import { onMount } from 'svelte'
   import { t } from '../locale.svelte'
-  import { game, driveTo, retry, backToStories } from '../game.svelte'
-  import Backdrop from '../Backdrop.svelte'
-  import StarRating from '../StarRating.svelte'
-  import { JK_START, JK_FLOOR, JK_DRAIN_TARGET, JK_ACTIONS, JK_HELP_IDS, type JkAction } from '../stories/johanniskraut'
-  import { stars as starsFor, type Outcome } from '../flow'
+  import { game, driveTo, backToStories } from '../game.svelte'
+  import PlayShell from '../PlayShell.svelte'
+  import WatchBody from '../WatchBody.svelte'
+  import EndScreen from '../EndScreen.svelte'
+  import {
+    JK_BASELINE, JK_DOSE, JK_READ_LEVEL, JK_FINALE_START, JK_FLOOR, JK_DRAIN_TARGET,
+    JK_TICK_DELAY, JK_TICK_PENALTY, JK_BAIT_BURST, JK_FACTS, JK_WEEK_DAYS, JK_FINALE_ACTIONS,
+    JK_CAUSE_DAY, JK_MECH_CANDIDATES, jkArmsRescue, jkClever, jkPro,
+    type JkWeekCard, type JkFinaleAction,
+  } from '../stories/johanniskraut'
+  import { stars } from '../flow'
 
-  type Beat = 'briefing' | 'event' | 'leak' | 'sealing' | 'outcome'
+  type Beat = 'briefing' | 'dosing' | 'doseReveal' | 'week' | 'label' | 'read' | 'mechanism' | 'finale' | 'outcome'
   let beat = $state<Beat>('briefing')
+  let outcome = $state<'win' | 'under'>('win')
+  let pumping = $state(false)
+
+  // dose-fill rotation
+  let factIdx = $state(0)
+  let fillDone = $state(false)
+  let factShownAt = 0
+  const FACT_MS = 4500
+  const FACT_MIN_MS = 3800
+
+  // week investigation
+  let dayIdx = $state(0)
+  let akte = $state<Set<string>>(new Set())
+  let herbTaken = $state(0)
+  let falseFlags = $state(0)
+  let leakActive = $state(false)
+  let weekFb = $state('jk.week.watch')
+  let weekTone = $state<'watch' | 'still' | 'falling'>('watch')
+
+  // label magnifier
+  let revealed = $state(false)
+
+  // read-the-body + mechanism
+  let readStumbled = $state(false)
+  let mechStumbled = $state(false)
+  let mechRight = $state(false)
+  let mechFb = $state<string | null>(null)
+  let readCost = $state(false)
+
+  // finale
+  let applied = $state<Set<string>>(new Set())
+  let baitCount = $state(0)
+  let monitorStopped = $state(false)
+  let minLevel = $state(JK_FINALE_START)
   let resolved = $state(false)
-  let outcome = $state<Outcome>('win')
-  let helped = $state<string[]>([])
-  let koederTapped = $state(false)
-  let fb = $state<{ key: string; bad: boolean } | null>(null)
+  let rescuing = $state(false)
+  let finaleFb = $state<string | null>(null)
 
-  // clever: full unless a decoy („Köder") was tapped → half. pro: how many of the
-  // protective help actions were found (both = full, one = half, none = 0).
-  let helpsFound = $derived(JK_HELP_IDS.filter((id) => helped.includes(id)).length)
-  let proQ = $derived(helpsFound >= JK_HELP_IDS.length ? 1 : helpsFound >= 1 ? 0.5 : 0)
-  let starCount = $derived(starsFor(outcome === 'win', !koederTapped ? 1 : 0.5, proQ))
-  let outCls = $derived(outcome === 'win' ? 'good' : 'bad')
+  let day = $derived(JK_WEEK_DAYS[dayIdx])
+  let isLastDay = $derived(dayIdx >= JK_WEEK_DAYS.length - 1)
+  let mandatoryDone = $derived(JK_FINALE_ACTIONS.filter((a) => a.kind === 'mandatory' && applied.has(a.id)).length)
+  let needBoth = $derived(mandatoryDone === 1 && !rescuing)
+  let clever = $derived(jkClever(herbTaken, falseFlags, !readStumbled, !mechStumbled))
+  let pro = $derived(jkPro(monitorStopped, baitCount, minLevel))
+  let starCount = $derived(stars(outcome === 'win', clever, pro))
+  let stepNum = $derived(
+    ['briefing', 'dosing', 'doseReveal'].includes(beat) ? 1
+    : beat === 'week' ? 2
+    : beat === 'label' ? 3
+    : beat === 'read' ? 4
+    : beat === 'mechanism' ? 5
+    : 6,
+  )
 
-  onMount(() => driveTo(JK_START, 8, () => {}))
+  onMount(() => drive(JK_BASELINE, 8)) // prime ungeschützt, below the band
 
-  // real-time floor watch: reaching JK_FLOOR while still leaking = rejection (lose)
+  function drive(target: number, rate: number, then: () => void = () => {}) {
+    pumping = true
+    driveTo(target, rate, () => { pumping = false; then() })
+  }
+
+  // rotate the dose-fill facts during the tutorial fill (40→62)
   $effect(() => {
-    if (beat === 'leak' && !resolved && game.level && game.level.level <= JK_FLOOR) {
-      resolved = true
-      outcome = 'under'
-      beat = 'outcome'
-    }
+    if (beat !== 'dosing') return
+    factIdx = 0
+    factShownAt = performance.now()
+    const id = setInterval(() => {
+      if (fillDone) return
+      factIdx = (factIdx + 1) % JK_FACTS.length
+      factShownAt = performance.now()
+    }, FACT_MS)
+    return () => clearInterval(id)
+  })
+  $effect(() => {
+    if (beat !== 'dosing' || !fillDone) return
+    const wait = Math.max(700, FACT_MIN_MS - (performance.now() - factShownAt))
+    const id = setTimeout(() => (beat = 'doseReveal'), wait)
+    return () => clearTimeout(id)
   })
 
-  function startLeak() {
-    beat = 'leak'
-    driveTo(JK_DRAIN_TARGET, 2.2, () => {}) // slow drain toward rejection
+  // finale: the live leak — track minLevel + trip the under-loss at the floor
+  $effect(() => {
+    if (beat !== 'finale' || resolved || rescuing) return
+    const lv = game.level?.level
+    if (lv === undefined) return
+    if (lv < minLevel) minLevel = lv
+    if (lv <= JK_FLOOR) { resolved = true; outcome = 'under'; beat = 'outcome' }
+  })
+
+  function giveDose() {
+    if (pumping) return
+    fillDone = false
+    beat = 'dosing'
+    drive(JK_DOSE, 7, () => (fillDone = true)) // 40 → 62
   }
-  function act(a: JkAction) {
-    if (resolved) return
-    fb = { key: a.feedbackKey, bad: a.kind !== 'fix' }
-    if (a.kind === 'fix') {
-      resolved = true
-      outcome = 'win'
-      beat = 'sealing'
-      driveTo(JK_START, 6, () => (beat = 'outcome'))
-    } else if (a.kind === 'koeder') {
-      koederTapped = true
-      driveTo(JK_DRAIN_TARGET, 4, () => {}) // worse — drain speeds up
-    } else if (!helped.includes(a.id)) {
-      helped = [...helped, a.id]
+
+  // ── week ──
+  function takeCard(card: JkWeekCard) {
+    if (pumping || akte.has(card.id)) return
+    akte = new Set(akte).add(card.id)
+    if (card.kind === 'herb') {
+      herbTaken += 1
+      leakActive = true
+      if (day.inducerTick === JK_TICK_DELAY) {
+        weekFb = 'jk.week.delay'; weekTone = 'still' // Dienstag = the twist: in the Akte, no move
+      } else {
+        weekFb = 'jk.week.culprit'; weekTone = 'falling'
+        drive(day.level, 2.5) // a visible downward tick — the Täter
+      }
+    } else if (card.kind === 'known') {
+      weekFb = 'jk.week.known'; weekTone = 'still'
+    } else {
+      falseFlags += 1
+      weekFb = 'jk.week.innocent'; weekTone = 'still'
+    }
+  }
+  function nextDay() {
+    if (pumping) return
+    if (isLastDay) { beat = 'label'; return }
+    const next = dayIdx + 1
+    dayIdx = next
+    weekFb = 'jk.week.watch'; weekTone = 'watch'
+    const hasHerb = JK_WEEK_DAYS[next].cards.some((c) => c.kind === 'herb')
+    if (leakActive && !hasHerb) drive(JK_WEEK_DAYS[next].level, 0.9) // accumulated drift between visits
+  }
+
+  // ── label → read ──
+  function labelNext() {
+    if (pumping) return
+    drive(JK_READ_LEVEL, 2.5, () => (beat = 'read')) // settle at the now-subtherapeutic trough
+  }
+
+  function readObserve() {
+    if (pumping) return
+    readStumbled = true
+    readCost = true
+    const cur = game.level?.level ?? JK_READ_LEVEL
+    drive(Math.max(JK_FLOOR + 1, cur - JK_TICK_PENALTY), 2.5) // waiting costs protection
+  }
+  function readAct() {
+    if (pumping) return
+    beat = 'mechanism'
+  }
+
+  function pickDay(id: string) {
+    if (pumping || mechRight) return
+    if (id === JK_CAUSE_DAY) {
+      mechRight = true
+      mechFb = 'jk.mech.right'
+    } else {
+      mechStumbled = true
+      mechFb = 'jk.mech.late'
+      const cur = game.level?.level ?? JK_READ_LEVEL
+      drive(Math.max(JK_FLOOR + 1, cur - JK_TICK_PENALTY), 2.5)
+    }
+  }
+  function toFinale() {
+    if (pumping) return
+    beat = 'finale'; resolved = false; minLevel = JK_FINALE_START
+    driveTo(JK_DRAIN_TARGET, 0.7, () => {}) // raw — the slow live fall; action buttons stay enabled
+  }
+
+  // ── finale ──
+  function applyAction(a: JkFinaleAction) {
+    if (resolved || rescuing) return
+    if (a.kind === 'bait') {
+      baitCount += 1
+      finaleFb = a.feedbackKey
+      const cur = game.level?.level ?? JK_FINALE_START
+      const burst = Math.max(JK_DRAIN_TARGET, cur - JK_BAIT_BURST)
+      driveTo(burst, 4, () => { if (!resolved && !rescuing) driveTo(JK_DRAIN_TARGET, 0.7, () => {}) })
+      return
+    }
+    if (applied.has(a.id)) return
+    applied = new Set(applied).add(a.id)
+    finaleFb = a.feedbackKey
+    if (a.kind === 'bonus') monitorStopped = true
+    if (jkArmsRescue([...applied])) {
+      rescuing = true
+      driveTo(JK_DOSE, 5, () => { if (!resolved) { resolved = true; outcome = 'win'; beat = 'outcome' } }) // rescue rise into green
     }
   }
 </script>
 
-<div class="play">
-  <Backdrop />
-  <button class="cancel" onclick={backToStories} aria-label={t('common.back')}>✕</button>
-  <div class="stage">
-    <main class="content">
+<div class="root">
+  {#if beat === 'outcome'}
+    <EndScreen
+      {outcome}
+      titleKey={`jk.out.${outcome}.title`}
+      subKey={`jk.out.${outcome}.sub`}
+      storyTitleKey="story.johanniskraut.title"
+      score={starCount}
+      factKeys={outcome === 'win' ? ['jk.out.dyk.lag', 'jk.out.dyk.herb'] : ['jk.out.dyk.under', 'jk.out.dyk.lag']}
+    />
+  {:else}
+    <PlayShell
+      color={game.story?.color ?? '#38e0a0'}
+      kicker={t('story.johanniskraut.title')}
+      caseLine={t('jk.case')}
+      step={stepNum}
+      total={6}
+      onCancel={backToStories}
+    >
       {#key beat}
         <div class="beat">
           {#if beat === 'briefing'}
-            <div class="pill">{t('story.johanniskraut.title')}</div>
-            <h1>{t('jk.brief.patient')}</h1>
-            <p class="lead">{t('jk.brief.goal')}</p>
-            <button class="btn primary big" onclick={() => (beat = 'event')}>{t('common.next')}</button>
-          {:else if beat === 'event'}
-            <div class="emoji">🌿</div>
-            <p class="lead">{t('jk.event.story')}</p>
-            <p class="warn">{t('jk.event.reveal')}</p>
-            <button class="btn primary big" onclick={startLeak}>{t('jk.event.btn')}</button>
-          {:else if beat === 'leak'}
-            <div class="alarm">⚠️ {t('jk.leak.prompt')}</div>
-            <div class="cards">
-              {#each JK_ACTIONS as a}
-                <button class="card" class:done={helped.includes(a.id)} onclick={() => act(a)}>{t(a.labelKey)}</button>
-              {/each}
+            <div class="scene">
+              <span class="pl-emoji">🧑‍⚕️</span>
+              <h1 class="pl-h1">{t('jk.brief.patient')}</h1>
+              <p class="pl-lead">{t('jk.brief.goal')}</p>
+              <div class="actions">
+                <button class="pl-action" disabled={pumping} onclick={giveDose}>{t('jk.brief.btn')}</button>
+              </div>
             </div>
-            {#if fb}<p class="fb {fb.bad ? 'bad' : 'good'}">{t(fb.key)}</p>{/if}
-          {:else if beat === 'sealing'}
-            <div class="big good">{t('jk.sealing')}</div>
-            <div class="dots">…</div>
-          {:else if beat === 'outcome'}
-            <h1 class={outCls}>{t('jk.out.' + outcome + '.title')}</h1>
-            <p class="lead">{t('jk.out.' + outcome + '.sub')}</p>
-            {#if outcome === 'win'}<StarRating score={starCount} />{/if}
-            <div class="dyk">
-              <span class="dlbl">{t('out.dyk')}</span>
-              <p>{t('jk.out.dyk1')}</p>
-              {#if outcome === 'win'}<p class="second">{t('jk.out.dyk2')}</p>{/if}
+
+          {:else if beat === 'dosing'}
+            <div class="scene wide">
+              <WatchBody text={t(fillDone ? 'jk.cue.filled' : 'jk.cue.fill')} tone="good" />
+              {#key factIdx}
+                <div class="factcard pl-card">
+                  <span class="factkick">{t('jk.fact.kicker')}</span>
+                  <p>{t(JK_FACTS[factIdx])}</p>
+                </div>
+              {/key}
             </div>
-            <div class="actions">
-              <button class="btn" onclick={backToStories}>← {t('stories.title')}</button>
-              <button class="btn primary" onclick={retry}>{t('common.retry')}</button>
+
+          {:else if beat === 'doseReveal'}
+            <div class="scene">
+              <div class="reveal pl-good">{t('jk.dose.reveal')}</div>
+              <div class="actions">
+                <button class="pl-action" onclick={() => (beat = 'week')}>{t('jk.dose.next')}</button>
+              </div>
+            </div>
+
+          {:else if beat === 'week'}
+            <div class="task">
+              <div class="daystrip">
+                {#each JK_WEEK_DAYS as d, i}
+                  <span class="daycell" class:now={i === dayIdx} class:past={i < dayIdx}>{t(d.shortKey)}</span>
+                {/each}
+              </div>
+              <div class="today">
+                <h2 class="pl-h2">{t(day.titleKey)}</h2>
+                <p class="pl-body note">{t(day.noteKey)}</p>
+                <div class="cards">
+                  {#each day.cards as card}
+                    <button class="weekcard" class:taken={akte.has(card.id)} disabled={pumping || akte.has(card.id)} onclick={() => takeCard(card)}>
+                      <span class="wicon">{card.icon}</span>
+                      <b>{t(card.labelKey)}</b>
+                      <small>{akte.has(card.id) ? t('jk.week.taken') : t('jk.week.take')}</small>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+              <WatchBody text={t(weekFb)} tone={weekTone} />
+              <div class="actions">
+                <button class="pl-action" disabled={pumping} onclick={nextDay}>{t(isLastDay ? 'jk.week.last' : 'jk.week.next')}</button>
+              </div>
+            </div>
+
+          {:else if beat === 'label'}
+            <div class="scene">
+              <h2 class="pl-h2">{t('jk.label.prompt')}</h2>
+              <div class="bottle" class:revealed>
+                <span class="bicon">🍵</span>
+                <span class="front">{t('jk.label.front')}</span>
+                <span class="back">{t('jk.label.back')}</span>
+              </div>
+              {#if !revealed}
+                <div class="actions">
+                  <button class="pl-action" onclick={() => (revealed = true)}>{t('jk.label.btn')}</button>
+                </div>
+              {:else}
+                <WatchBody text={t('jk.label.wait')} tone="still" />
+                <div class="actions">
+                  <button class="pl-action" onclick={labelNext}>{t('jk.label.next')}</button>
+                </div>
+              {/if}
+            </div>
+
+          {:else if beat === 'read'}
+            <div class="task">
+              <h2 class="pl-h2 center">{t(readCost ? 'jk.read.cost' : 'jk.read.prompt')}</h2>
+              <div class="optcol">
+                <button class="pl-opt" disabled={pumping} onclick={readObserve}>{t('jk.read.observe')}</button>
+                <button class="pl-opt" disabled={pumping} onclick={readAct}>{t('jk.read.act')}</button>
+              </div>
+              <WatchBody text={t('jk.read.watch')} tone={readCost ? 'falling' : 'watch'} />
+            </div>
+
+          {:else if beat === 'mechanism'}
+            <div class="task">
+              <h2 class="pl-h2 center">{t('jk.mech.prompt')}</h2>
+              <p class="pl-body gloss">{t('jk.mech.gloss')}</p>
+              <div class="daystrip pick">
+                {#each JK_WEEK_DAYS as d}
+                  {@const cand = JK_MECH_CANDIDATES.includes(d.id)}
+                  <button
+                    class="daycell btn"
+                    class:inert={!cand}
+                    class:picked={mechRight && d.id === JK_CAUSE_DAY}
+                    disabled={pumping || !cand || mechRight}
+                    onclick={() => pickDay(d.id)}
+                  >{t(d.shortKey)}</button>
+                {/each}
+              </div>
+              {#if mechFb}<p class="fb {mechRight ? 'pl-good' : 'pl-warn'}">{t(mechFb)}</p>{/if}
+              {#if mechRight}
+                <div class="actions">
+                  <button class="pl-action" disabled={pumping} onclick={toFinale}>{t('jk.mech.next')}</button>
+                </div>
+              {/if}
+            </div>
+
+          {:else if beat === 'finale'}
+            <div class="task">
+              <h2 class="pl-h2 center">{t('jk.finale.prompt')}</h2>
+              <WatchBody text={rescuing ? t('jk.finale.rescue') : t('jk.finale.sub')} tone={rescuing ? 'good' : 'falling'} />
+              <div class="optcol">
+                {#each JK_FINALE_ACTIONS as a}
+                  <button class="pl-opt" class:done={applied.has(a.id)} disabled={resolved || rescuing || applied.has(a.id)} onclick={() => applyAction(a)}>{t(a.labelKey)}</button>
+                {/each}
+              </div>
+              {#if needBoth}<p class="fb pl-warn">{t('jk.fb.needBoth')}</p>{:else if finaleFb}<p class="fb {applied.size && !baitCount ? 'pl-good' : 'pl-warn'}">{t(finaleFb)}</p>{/if}
             </div>
           {/if}
         </div>
       {/key}
-    </main>
-  </div>
+    </PlayShell>
+  {/if}
 </div>
 
 <style>
-  .play { position: relative; height: 100%; overflow: hidden; }
-  .cancel { position: absolute; top: 16px; inset-inline-start: 16px; z-index: 3; width: 46px; height: 46px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--dim); font-size: 18px; font-weight: 700; }
-  .stage { position: relative; z-index: 1; height: 100%; display: grid; grid-template-columns: 1fr; align-items: center; padding: 28px clamp(36px, 5vw, 80px); }
-  .content { display: flex; align-items: center; justify-content: center; min-width: 0; height: 100%; }
-  .beat { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: 100%; max-width: 760px; animation: beatin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
-  .pill { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 18px; font-size: 14px; font-weight: 700; color: var(--spm-cyan-bright); }
-  h1 { font-size: clamp(30px, 3.6vw, 46px); font-weight: 900; line-height: 1.1; }
-  h1.good { color: var(--green); } h1.bad { color: var(--toxic); }
-  .lead { font-size: clamp(18px, 2vw, 25px); line-height: 1.5; }
-  .warn { color: var(--grape); font-size: 18px; font-weight: 700; }
-  .big { font-size: clamp(30px, 3.4vw, 44px); font-weight: 900; }
-  .big.good { color: var(--green); }
-  .emoji { font-size: 72px; }
-  .alarm { font-size: clamp(20px, 2.2vw, 27px); font-weight: 800; color: var(--toxic); animation: blink 1s ease-in-out infinite; }
-  .cards { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-  .card { text-align: start; background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 16px 22px; font-size: clamp(16px, 1.7vw, 21px); font-weight: 700; }
-  .card:active { transform: scale(0.98); border-color: var(--spm-cyan); background: var(--surface2); }
-  .card.done { border-color: var(--green); opacity: 0.7; }
-  .fb { font-size: clamp(17px, 1.9vw, 24px); font-weight: 800; line-height: 1.4; }
-  .fb.good { color: var(--green); } .fb.bad { color: var(--toxic); }
-  .dots { font-size: 56px; color: var(--dim); animation: pulsedots 1s ease-in-out infinite; }
-  .dyk { max-width: 680px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 22px; }
-  .dlbl { font-size: 13px; color: var(--grape); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
-  .dyk p { margin-top: 6px; font-size: 17px; line-height: 1.5; }
-  .dyk .second { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--dim); }
-  .actions { display: flex; gap: 12px; margin-top: 6px; }
-  .btn.big { padding: 18px 44px; font-size: 22px; border-radius: 18px; }
-  @keyframes beatin { from { opacity: 0; transform: translateY(20px); } }
-  @keyframes blink { 50% { opacity: 0.5; } }
-  @keyframes pulsedots { 50% { opacity: 0.3; } }
-  @media (prefers-reduced-motion: reduce) { .beat, .alarm { animation: none; } }
+  .root { position: relative; height: 100%; }
+  .beat { height: 100%; display: grid; align-content: center; justify-items: center; gap: var(--sp-4); animation: beatin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+  .scene { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); max-width: 880px; text-align: center; }
+  .scene.wide { max-width: 980px; width: 100%; }
+  .task { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); width: 100%; }
+  .center { text-align: center; }
+  .actions { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; }
+  .fb { font-size: var(--fs-h2); font-weight: 800; line-height: 1.3; max-width: 900px; text-align: center; }
+  .note { color: var(--dim); text-align: center; }
+  .gloss { color: var(--dim); max-width: 760px; text-align: center; }
+
+  .factcard { max-width: 680px; text-align: center; animation: factin 0.4s ease both; }
+  .factcard .factkick { display: inline-block; font-size: var(--fs-micro); font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: var(--spm-cyan-bright); margin-bottom: var(--sp-1); }
+  .factcard p { font-size: var(--fs-lead); line-height: 1.45; }
+  .reveal { font-size: var(--fs-display); font-weight: 900; line-height: 1.05; text-shadow: 0 0 26px color-mix(in srgb, var(--green) 35%, transparent); }
+
+  /* flat week day strip — labels only, NO height/fill encoding (read-only history) */
+  .daystrip { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; }
+  .daycell { min-width: 56px; padding: 10px 14px; border-radius: var(--r-pill); border: 1.5px solid var(--border); background: var(--surface); font-size: var(--fs-body); font-weight: 800; color: var(--dim); text-align: center; }
+  .daycell.now { color: var(--text); border-color: color-mix(in srgb, var(--story) 65%, transparent); box-shadow: 0 0 14px color-mix(in srgb, var(--story) 30%, transparent); }
+  .daycell.past { opacity: 0.45; }
+  .daystrip.pick .daycell.btn { color: var(--text); }
+  .daycell.btn:active:not(:disabled) { transform: scale(0.95); }
+  .daycell.inert { opacity: 0.3; }
+  .daycell.picked { border-color: var(--green); background: color-mix(in srgb, var(--green) 16%, var(--surface)); color: var(--text); }
+
+  .today { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); width: 100%; }
+  .cards { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; }
+  .weekcard { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 170px; min-height: 120px; padding: var(--sp-3); border: 1.5px solid var(--border); border-radius: var(--r-card); background: var(--surface); color: var(--text); transition: transform 0.1s ease, border-color 0.2s ease; }
+  .weekcard:active:not(:disabled) { transform: scale(0.96); border-color: color-mix(in srgb, var(--story) 60%, transparent); }
+  .weekcard .wicon { font-size: 40px; }
+  .weekcard b { font-size: var(--fs-body); font-weight: 800; }
+  .weekcard small { font-size: var(--fs-micro); font-weight: 800; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .weekcard.taken { border-color: var(--story); opacity: 0.8; }
+
+  .optcol { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; max-width: 720px; }
+  .pl-opt.done { border-color: var(--green); background: color-mix(in srgb, var(--green) 12%, var(--surface)); }
+
+  /* Etikett-Lupe — same Stimmungstee object, press to reveal the back label */
+  .bottle { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-4) var(--sp-6); border: 2px solid color-mix(in srgb, var(--story) 55%, transparent); border-radius: var(--r-card); background: color-mix(in srgb, var(--story) 12%, var(--surface)); min-width: 320px; }
+  .bottle .bicon { font-size: 60px; }
+  .bottle .front { font-size: var(--fs-lead); font-weight: 700; color: var(--text); transition: opacity 0.3s ease; }
+  .bottle .back { position: absolute; bottom: var(--sp-4); font-size: var(--fs-lead); font-weight: 900; color: var(--story); opacity: 0; transform: scale(0.9); transition: opacity 0.3s ease, transform 0.3s ease; }
+  .bottle.revealed .front { opacity: 0.15; }
+  .bottle.revealed .back { opacity: 1; transform: scale(1); }
+
+  @keyframes beatin { from { opacity: 0; transform: translateY(18px); } }
+  @keyframes factin { from { opacity: 0; transform: translateY(8px); } }
+  @media (prefers-reduced-motion: reduce) { .beat, .factcard { animation: none; } }
 </style>

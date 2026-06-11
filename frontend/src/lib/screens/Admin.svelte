@@ -117,15 +117,18 @@
   // level so the VIRTUAL TORSO shows the *real* empty→refill, then auto-clear it once
   // it settles. The game's own between-runs re-home is untouched (stays instant).
   let autoSim = $state(false)
-  async function devSeedThen(run: () => Promise<unknown>) {
+  async function devSeedThen(run: () => Promise<unknown>, seed?: number) {
     if (!isReal && !game.level?.sim_active) {
       autoSim = true
-      await api.dev.simulateStart(game.level?.level ?? 20).catch(() => {})
+      await api.dev.simulateStart(seed ?? game.level?.level ?? 20).catch(() => {})
     }
     run().catch(() => {})
   }
   const doInit = () => devSeedThen(() => api.admin.prepare())
   const doHome = () => devSeedThen(() => api.admin.home())
+  // prime-only assumes a hand-emptied torso → seed the dev sim from empty so the
+  // virtual torso shows the genuine fill-from-empty (not an overfill from wherever)
+  const doPrime = () => devSeedThen(() => api.admin.prime(), 0)
   const doGoto = (level: number) => api.admin.goto(level).catch(() => {})
 
   // once an auto-seeded init/home settles, return the mock to its fast shortcut mode
@@ -335,12 +338,20 @@
       <div class="block">
         <div class="bhead">① Initialize — start of day / first game</div>
         <div class="op">
-          <button class="prepare big" onclick={doInit} disabled={driving}>▶ Initialize the system</button>
-          <p>
-            Empties the torso, then fills it to the baseline start level{#if plan} (~{Math.round(plan.empty_s + plan.prime_s)}s){/if} —
-            the system now knows exactly where the water is. Do this once on power-up, then start a
-            game. Every game after this re-homes itself automatically.
-          </p>
+          <div class="opbtns">
+            <button class="prepare big" onclick={doInit} disabled={driving}>▶ Initialize the system</button>
+            <button class="prime-only" onclick={doPrime} disabled={driving}>↥ Prime only — already empty</button>
+          </div>
+          <div class="opdesc">
+            <p>
+              <b>Initialize</b> empties the torso, then fills to the baseline{#if plan} (~{Math.round(plan.empty_s + plan.prime_s)}s){/if}
+              — a full re-home; the system then knows where the water is. Do this once on power-up.
+            </p>
+            <p>
+              <b>Prime only</b> skips draining — assumes you've emptied the torso <b>by hand</b>, then
+              just primes to baseline{#if plan} (~{Math.round(plan.prime_s)}s){/if}. Overfills if it wasn't empty.
+            </p>
+          </div>
         </div>
         {#if game.level?.pump_busy}<p class="powermsg">Initializing … keep hands clear of the pump.</p>{/if}
       </div>
@@ -587,13 +598,16 @@
     border-color: transparent;
   }
 
-  /* tab content — fills the remaining height, no scroll */
+  /* tab content — fills the remaining height. Fits without scrolling on the real Pi
+     (Setup has no dev block there); the dev-PC-only sim block can make Setup taller,
+     so allow it to scroll instead of spilling onto the telemetry strip. */
   .panel {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    overflow-y: auto;
   }
 
   .speed label {
@@ -833,6 +847,33 @@
   .prepare {
     background: linear-gradient(120deg, var(--spm-cyan, #00beca), var(--green, #1f9d6b));
     color: #04222a;
+  }
+  .opbtns {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .opbtns .big {
+    padding: 18px 8px;
+  }
+  .opdesc {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .opdesc p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--dim);
+  }
+  .opdesc b {
+    color: #e8edff;
+  }
+  .prime-only {
+    background: #1b2440;
+    color: #e8edff;
+    border: 1px solid var(--spm-cyan, #00beca) !important;
   }
   .empty-btn {
     background: #2a3556;

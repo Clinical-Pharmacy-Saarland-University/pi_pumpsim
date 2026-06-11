@@ -1,238 +1,346 @@
 <script lang="ts">
-  // Self-contained v2 story „Die Nieren-Skala" (DOI). Unique mechanic = read the
-  // eGFR gauge → set the 3-notch dose dial. Pure logic in stories/organ.ts.
+  // Self-contained v2 story „Der müde Filter" (Organ/DOI · eGFR↓ × Metformin).
+  // Blueprint screen on <PlayShell/> + the .pl-* kit. Signature mechanic: CALIBRATE-A-LIVE-
+  // INFLOW vs an invisible weakened drain — the kidney clears Metformin (the drain); a weak
+  // kidney clears less → the SAME dose accumulates → der Spiegel rises live over the window;
+  // the player taps „reduzieren" mid-rise to redirect the pump back into green. The cold-start
+  // twist: one unchanged dose runs 42→62 (normal) then keeps creeping 62→78 (over). No on-screen
+  // vessel/gauge — the physical pump is the readout. Over-loss resolves on settle (no auto-trip
+  // on the play2 path; settle-only per spec §4/§12).
   import { onMount } from 'svelte'
   import { t } from '../locale.svelte'
-  import { game, driveTo, retry, backToStories } from '../game.svelte'
-  import Backdrop from '../Backdrop.svelte'
-  import StarRating from '../StarRating.svelte'
+  import { game, driveTo, backToStories } from '../game.svelte'
+  import PlayShell from '../PlayShell.svelte'
+  import WatchBody from '../WatchBody.svelte'
+  import EndScreen from '../EndScreen.svelte'
   import {
-    ORGAN_START, ORGAN_DOSE, ORGAN_EVENT_TARGET, ORGAN_DETECT, ORGAN_NOTCHES, ORGAN_TRAP_FEEDBACK,
-    ORGAN_FINALE, ORGAN_MEASURES, organFinaleCorrect, EGFR, type DialNotch, type OrganDetectItem,
+    ORGAN_BASE, ORGAN_DOSE, ORGAN_DRIFT, ORGAN_CONFIRM, ORGAN_LIVE_START, ORGAN_TRAP_WARN,
+    ORGAN_FACTS, ORGAN_DETECT, ORGAN_TAPS, ORGAN_PLAN, organClever, organPro,
+    type OrganDetectItem, type OrganTap, type OrganPlanCard,
   } from '../stories/organ'
-  import { stars as starsFor, type Outcome } from '../flow'
+  import { stars, type Outcome } from '../flow'
 
-  type Beat = 'briefing' | 'dose' | 'dosereveal' | 'event' | 'eventreveal' | 'detective'
-    | 'mechanism' | 'dial' | 'decided' | 'moving' | 'finale' | 'outcome'
+  type Beat =
+    | 'briefing' | 'dose' | 'dosing' | 'question'
+    | 'detective' | 'detmoving' | 'detfound' | 'mechanism'
+    | 'live' | 'livemoving' | 'won' | 'plan' | 'outcome'
   let beat = $state<Beat>('briefing')
-  let chosen = $state<DialNotch | null>(null)
-  let detectiveFirstTry = $state(true)
-  let trapTapped = $state(false)
-  let finalePerfect = $state(false)
-  let detectFb = $state<{ key: string; bad: boolean } | null>(null)
-  let trapFb = $state(false)
+  let outcome = $state<Outcome>('win')
+  let pumping = $state(false) // a resolution move is running → action buttons blocked
 
-  let notches = $derived(ORGAN_NOTCHES.filter((n) => game.ageGroup === 'adult' || !n.adultOnly))
-  let outcome = $derived<Outcome>(chosen?.result ?? 'win')
-  // clever: full if the cause was found first try, else half. pro: full only if no
-  // trap AND a perfect finale; half if one of the two slipped; none if both did.
-  let proQ = $derived((!trapTapped && finalePerfect) ? 1 : (!trapTapped || finalePerfect) ? 0.5 : 0)
-  let starCount = $derived(starsFor(outcome === 'win', detectiveFirstTry ? 1 : 0.5, proQ))
-  let outCls = $derived(outcome === 'win' ? 'good' : outcome === 'under' ? 'warn' : 'bad')
-  let decidedCls = $derived(chosen?.result === 'win' ? 'good' : 'bad')
+  // dose-fill rotation + cold-start creep
+  let factIdx = $state(0)
+  let fillDone = $state(false)
+  let factShownAt = 0
+  let creep = $state(false)
+  const FACT_MS = 4500
+  const FACT_MIN_MS = 3800
 
-  // finale assignment
-  let assign = $state<Record<string, string | undefined>>({})
-  let finaleConfirmed = $state(false)
-  let allAssigned = $derived(ORGAN_FINALE.every((r) => assign[r.id] !== undefined))
+  // detective
+  let wrongGuesses = $state(0)
+  let detectFb = $state<string | null>(null)
 
-  onMount(() => driveTo(ORGAN_START, 8, () => {}))
+  // live cut
+  let liveRising = $state(false) // the untouched auto-rise (buttons stay enabled to catch it)
+  let liveChosen = $state<OrganTap | null>(null)
+  let resolved = $state(false)
+  let baited = $state(false)
+  let baitFb = $state(false)
+  let moveCue = $state('organ.live.reduce')
+  let moveTone = $state<'rising' | 'falling'>('falling')
+
+  // finale plan
+  let planDone = $state<Set<string>>(new Set())
+  let planTrapTapped = $state(false)
+  let trapActive = $state(false)
+  let planFb = $state<string | null>(null)
+
+  let taps = $derived(ORGAN_TAPS.filter((t) => game.ageGroup === 'adult' || !t.adultOnly))
+  let safeCount = $derived(ORGAN_PLAN.filter((c) => !c.trap && planDone.has(c.id)).length)
+  let planComplete = $derived(safeCount === 2 && !trapActive)
+  let clever = $derived(organClever(wrongGuesses))
+  let timelyReduce = $derived(outcome === 'win' && !baited)
+  let pro = $derived(organPro(timelyReduce, !planTrapTapped))
+  let starCount = $derived(stars(outcome === 'win', clever, pro))
+  let stepNum = $derived(
+    ['briefing', 'dose', 'dosing'].includes(beat) ? 1
+    : beat === 'question' ? 2
+    : ['detective', 'detmoving', 'detfound'].includes(beat) ? 3
+    : beat === 'mechanism' ? 4
+    : ['live', 'livemoving', 'won'].includes(beat) ? 5
+    : 6,
+  )
+
+  onMount(() => drive(ORGAN_BASE, 8)) // hold at ≈42 — empty starting body, no medicine yet
+
+  function drive(target: number, rate: number, then: () => void = () => {}) {
+    pumping = true
+    driveTo(target, rate, () => { pumping = false; then() })
+  }
+
+  // rotate the dose-fill facts while the cold-start hub pumps (42→62→78)
+  $effect(() => {
+    if (beat !== 'dosing') return
+    factIdx = 0
+    factShownAt = performance.now()
+    const id = setInterval(() => {
+      if (fillDone) return
+      factIdx = (factIdx + 1) % ORGAN_FACTS.length
+      factShownAt = performance.now()
+    }, FACT_MS)
+    return () => clearInterval(id)
+  })
+  $effect(() => {
+    if (beat !== 'dosing' || !fillDone) return
+    const wait = Math.max(700, FACT_MIN_MS - (performance.now() - factShownAt))
+    const id = setTimeout(() => (beat = 'question'), wait)
+    return () => clearTimeout(id)
+  })
 
   function giveDose() {
-    beat = 'moving'
-    driveTo(ORGAN_DOSE, 5, () => (beat = 'dosereveal'))
+    if (pumping) return
+    fillDone = false; creep = false
+    beat = 'dosing'
+    // ONE uninterrupted rise: 42→62 (normal) then, unchanged, 62→78 (over the window)
+    drive(ORGAN_DOSE, 5, () => { creep = true; drive(ORGAN_DRIFT, 3, () => (fillDone = true)) })
   }
-  function toEventDrift() {
-    beat = 'moving'
-    driveTo(ORGAN_EVENT_TARGET, 4, () => (beat = 'eventreveal'))
+
+  function pickDetect(d: OrganDetectItem) {
+    if (pumping) return
+    if (d.correct) {
+      detectFb = null
+      beat = 'detmoving'
+      drive(ORGAN_CONFIRM, 2, () => (beat = 'detfound')) // staut UP a last step, clings to the edge
+    } else {
+      wrongGuesses += 1
+      detectFb = d.feedbackKey // DEAD STILL — no pump move
+    }
   }
-  function tapDetect(it: OrganDetectItem) {
-    detectFb = { key: it.feedbackKey, bad: !it.correct }
-    if (it.correct) setTimeout(() => (beat = 'mechanism'), 1100)
-    else detectiveFirstTry = false
+
+  function mechNext() {
+    if (pumping) return
+    drive(ORGAN_LIVE_START, 4, () => { beat = 'live'; startRise() }) // engage the tap at 76
   }
-  function tapNotch(n: DialNotch) {
-    chosen = n
-    beat = 'decided'
+  function startRise() {
+    liveRising = true
+    driveTo(ORGAN_DRIFT, 3, () => (liveRising = false)) // 76→78 untouched cap; buttons stay enabled to catch it
   }
-  function tapTrap() {
-    trapTapped = true
-    trapFb = true
+  function pickTap(tap: OrganTap) {
+    if (pumping) return
+    liveRising = false
+    liveChosen = tap; resolved = false
+    beat = 'livemoving'
+    if (tap.result === 'win') { moveCue = 'organ.live.reduce'; moveTone = 'falling' }
+    else if (tap.result === 'over') { moveCue = 'organ.live.over'; moveTone = 'rising' }
+    else { moveCue = 'organ.live.under'; moveTone = 'falling' }
+    drive(tap.target, 4, () => {
+      if (resolved) return
+      resolved = true
+      if (tap.result === 'win') beat = 'won'
+      else { outcome = tap.result; beat = 'outcome' } // settle-only over/under (no engine auto-trip on play2)
+    })
   }
-  function afterDecided() {
-    if (!chosen) return
-    beat = 'moving'
-    driveTo(chosen.target, 4, () => (beat = chosen!.result === 'win' ? 'finale' : 'outcome'))
+  function tapBait() {
+    if (pumping) return
+    baited = true
+    baitFb = true // no pump move — the still rising/edge water is the answer „hilft nicht"
   }
-  function setMeasure(rowId: string, m: string) {
-    if (finaleConfirmed) return
-    assign = { ...assign, [rowId]: m }
+
+  function pickPlan(card: OrganPlanCard) {
+    if (pumping) return
+    if (card.trap) {
+      planTrapTapped = true; trapActive = true; planFb = 'organ.plan.trapWarn'
+      drive(ORGAN_TRAP_WARN, 3) // 62→72 warning creep over green
+    } else {
+      const s = new Set(planDone); s.add(card.id); planDone = s; planFb = 'organ.plan.safe'
+    }
   }
-  function confirmFinale() {
-    if (!allAssigned) return
-    finalePerfect = organFinaleCorrect(assign as Record<string, string>)
-    finaleConfirmed = true
+  function takeback() {
+    if (pumping) return
+    drive(ORGAN_DOSE, 3, () => (trapActive = false)) // 72→62 back into green
   }
 </script>
 
-<div class="play">
-  <Backdrop />
-  <button class="cancel" onclick={backToStories} aria-label={t('common.back')}>✕</button>
-  <div class="stage">
-    <main class="content">
-      {#key beat + (finaleConfirmed ? 'c' : '') + (detectFb?.key ?? '')}
+<div class="root">
+  {#if beat === 'outcome'}
+    <EndScreen
+      {outcome}
+      titleKey={`organ.out.${outcome}.title`}
+      subKey={`organ.out.${outcome}.sub`}
+      storyTitleKey="story.organ.title"
+      score={starCount}
+      factKeys={outcome === 'win'
+        ? ['organ.out.dyk1', 'organ.out.dyk2']
+        : outcome === 'over'
+          ? ['organ.out.dyk.over', 'organ.out.dyk1']
+          : ['organ.out.dyk.under', 'organ.out.dyk1']}
+    />
+  {:else}
+    <PlayShell
+      color={game.story?.color ?? '#ff6b7a'}
+      kicker={t('story.organ.title')}
+      caseLine={t('organ.case')}
+      step={stepNum}
+      total={6}
+      onCancel={backToStories}
+    >
+      {#key beat}
         <div class="beat">
           {#if beat === 'briefing'}
-            <div class="pill">{t('story.organ.title')}</div>
-            <h1>{t('organ.brief.patient')}</h1>
-            <p class="lead">{t('organ.brief.goal')}</p>
-            <button class="btn primary big" onclick={() => (beat = 'dose')}>{t('common.next')}</button>
-          {:else if beat === 'dose'}
-            <div class="emoji">💊</div>
-            <h2>{t('organ.dose.prompt')}</h2>
-            <button class="btn primary big" onclick={giveDose}>{t('dose.give')}</button>
-          {:else if beat === 'moving'}
-            <div class="dots">…</div>
-          {:else if beat === 'dosereveal'}
-            <div class="big good">{t('reveal.in')}</div>
-            <p class="lead">{t('organ.dose.reveal')}</p>
-            <button class="btn primary big" onclick={() => (beat = 'event')}>{t('common.next')}</button>
-          {:else if beat === 'event'}
-            <div class="emoji">🧪</div>
-            <p class="lead">{t('organ.event.story')}</p>
-            <button class="btn primary big" onclick={toEventDrift}>{t('common.next')}</button>
-          {:else if beat === 'eventreveal'}
-            <div class="big bad">{t('reveal.high')}</div>
-            <p class="lead">{t('organ.event.reveal')}</p>
-            <button class="btn primary big" onclick={() => (beat = 'detective')}>{t('common.next')}</button>
-          {:else if beat === 'detective'}
-            <h2>{t('organ.det.prompt')}</h2>
-            <div class="opts">
-              {#each ORGAN_DETECT as it}
-                <button class="opt" onclick={() => tapDetect(it)}>{t(it.labelKey)}</button>
-              {/each}
-            </div>
-            {#if detectFb}<p class="fb {detectFb.bad ? 'bad' : 'good'}">{t(detectFb.key)}</p>{/if}
-          {:else if beat === 'mechanism'}
-            <div class="emoji">💡</div>
-            <p class="lead">{t('organ.mech')}</p>
-            <button class="btn primary big" onclick={() => (beat = 'dial')}>{t('common.next')}</button>
-          {:else if beat === 'dial'}
-            <h2>{t('organ.dial.prompt')}</h2>
-            <div class="gauge">
-              <div class="track">
-                <div class="zone red"></div><div class="zone yellow"></div><div class="zone green"></div>
-                <div class="needle" style="left:{(EGFR / 90) * 100}%"></div>
+            <div class="scene">
+              <span class="pl-emoji">🧑‍⚕️</span>
+              <h1 class="pl-h1">{t('organ.brief.patient')}</h1>
+              <p class="pl-lead">{t('organ.brief.goal')}</p>
+              <div class="actions">
+                <button class="pl-action" disabled={pumping} onclick={() => (beat = 'dose')}>{t('organ.brief.go')}</button>
               </div>
-              <div class="gval">eGFR {EGFR} ml/min</div>
             </div>
-            <div class="dial">
-              {#each notches as n}
-                <button class="notch" class:hint={game.ageGroup === 'young' && n.id === 'reduced'} onclick={() => tapNotch(n)}>
-                  <span class="nlabel">{t(n.labelKey)}</span>
-                  <span class="nmg">{t(n.mgKey)}</span>
-                </button>
-              {/each}
+
+          {:else if beat === 'dose'}
+            <div class="scene">
+              <span class="pl-emoji">💊</span>
+              <h2 class="pl-h2">{t('organ.dose.prompt')}</h2>
+              <div class="actions">
+                <button class="pl-action" disabled={pumping} onclick={giveDose}>{t('organ.dose.btn')}</button>
+              </div>
             </div>
-            <button class="trap" onclick={tapTrap}>{t('organ.trap')}</button>
-            {#if trapFb}<p class="fb bad">{t(ORGAN_TRAP_FEEDBACK)}</p>{/if}
-          {:else if beat === 'decided' && chosen}
-            <div class="fb {decidedCls}">{t(chosen.feedbackKey)}</div>
-            <button class="btn primary big" onclick={afterDecided}>{t('common.next')}</button>
-          {:else if beat === 'finale'}
-            <h2>{t('organ.fin.prompt')}</h2>
-            <div class="bins">
-              {#each ORGAN_FINALE as r}
-                <div class="binrow" class:right={finaleConfirmed && assign[r.id] === r.correct} class:wrong={finaleConfirmed && assign[r.id] !== r.correct}>
-                  <span class="combo">{t(r.egfrKey)}</span>
-                  <div class="binbtns">
-                    {#each ORGAN_MEASURES as m}
-                      <button class="binbtn" class:sel={assign[r.id] === m} disabled={finaleConfirmed} onclick={() => setMeasure(r.id, m)}>{t('organ.measure.' + m)}</button>
-                    {/each}
-                  </div>
+
+          {:else if beat === 'dosing'}
+            <div class="scene wide">
+              <WatchBody text={t(creep ? 'organ.cue.creep' : 'organ.cue.fill')} tone={creep ? 'rising' : 'good'} />
+              {#key factIdx}
+                <div class="factcard pl-card">
+                  <span class="factkick">{t('organ.fact.kicker')}</span>
+                  <p>{t(ORGAN_FACTS[factIdx])}</p>
                 </div>
-              {/each}
+              {/key}
             </div>
-            {#if !finaleConfirmed}
-              <button class="btn primary big" onclick={confirmFinale} disabled={!allAssigned}>{t('ddi.fin.confirm')}</button>
-            {:else}
-              <div class="fb {finalePerfect ? 'good' : 'bad'}">{finalePerfect ? t('organ.fin.correct') : t('organ.fin.wrong')}</div>
-              <p class="lesson">{t('organ.fin.lesson')}</p>
-              <button class="btn primary big" onclick={() => (beat = 'outcome')}>{t('common.next')}</button>
-            {/if}
-          {:else if beat === 'outcome'}
-            <h1 class={outCls}>{t('organ.out.' + outcome + '.title')}</h1>
-            <p class="lead">{t('organ.out.' + outcome + '.sub')}</p>
-            {#if outcome === 'win'}<StarRating score={starCount} />{/if}
-            <div class="dyk">
-              <span class="dlbl">{t('out.dyk')}</span>
-              <p>{t('organ.out.dyk1')}</p>
-              {#if outcome === 'win'}<p class="second">{t('organ.out.dyk2')}</p>{/if}
+
+          {:else if beat === 'question'}
+            <div class="scene">
+              <h2 class="pl-h2">{t('organ.q.prompt')}</h2>
+              <WatchBody text={t('organ.q.watch')} tone="watch" />
+              <div class="actions">
+                <button class="pl-action" onclick={() => (beat = 'detective')}>{t('organ.q.btn')}</button>
+              </div>
             </div>
-            <div class="actions">
-              <button class="btn" onclick={backToStories}>← {t('stories.title')}</button>
-              <button class="btn primary" onclick={retry}>{t('common.retry')}</button>
+
+          {:else if beat === 'detective'}
+            <div class="task">
+              <h2 class="pl-h2 center">{t('organ.det.prompt')}</h2>
+              <div class="optcol">
+                {#each ORGAN_DETECT as d}
+                  <button class="pl-opt" disabled={pumping} onclick={() => pickDetect(d)}>{t(d.labelKey)}</button>
+                {/each}
+              </div>
+              <WatchBody text={t(detectFb ?? 'organ.det.watch')} tone={detectFb ? 'still' : 'watch'} />
+            </div>
+
+          {:else if beat === 'detmoving'}
+            <div class="scene"><WatchBody text={t('organ.det.confirm')} tone="rising" /></div>
+
+          {:else if beat === 'detfound'}
+            <div class="scene">
+              <div class="causecard"><span class="cicon">🫘</span><b>{game.ageGroup === 'adult' ? t('organ.det.causeAdult') : t('organ.det.causeYoung')}</b></div>
+              <div class="reveal pl-good small">{t('organ.det.found')}</div>
+              <p class="pl-lead">{t('organ.det.foundPeek')}</p>
+              <div class="actions">
+                <button class="pl-action" onclick={() => (beat = 'mechanism')}>{t('common.next')}</button>
+              </div>
+            </div>
+
+          {:else if beat === 'mechanism'}
+            <div class="scene wide">
+              <span class="pl-emoji">💡</span>
+              <p class="pl-lead">{t('organ.mech')}</p>
+              <WatchBody text={t('organ.mech.watch')} tone="still" />
+              <div class="actions">
+                <button class="pl-action" disabled={pumping} onclick={mechNext}>{t('organ.mech.btn')}</button>
+              </div>
+            </div>
+
+          {:else if beat === 'live'}
+            <div class="task">
+              <h2 class="pl-h2 center">{t('organ.live.prompt')}</h2>
+              <WatchBody text={t('organ.live.watch')} tone="rising" />
+              <div class="optcol">
+                {#each taps as tap}
+                  <button class="pl-opt" disabled={pumping} onclick={() => pickTap(tap)}>{t(tap.labelKey)}</button>
+                {/each}
+                <button class="pl-opt ghost" disabled={pumping} onclick={tapBait}>{t('organ.tap.bait')}</button>
+              </div>
+              {#if baitFb}<p class="fb pl-warn">{t('organ.tfb.bait')}</p>{/if}
+            </div>
+
+          {:else if beat === 'livemoving'}
+            <div class="scene">
+              <WatchBody text={t(moveCue)} tone={moveTone} />
+              {#if liveChosen && liveChosen.result !== 'win'}<p class="fb pl-bad">{t(liveChosen.feedbackKey)}</p>{/if}
+            </div>
+
+          {:else if beat === 'won'}
+            <div class="scene">
+              <h2 class="pl-h2 pl-good">{t('organ.won.title')}</h2>
+              <p class="pl-lead">{t('organ.won.body')}</p>
+              <p class="pl-body">{t('organ.won.peek')}</p>
+              <div class="actions">
+                <button class="pl-action" onclick={() => (beat = 'plan')}>{t('common.next')}</button>
+              </div>
+            </div>
+
+          {:else if beat === 'plan'}
+            <div class="task">
+              <h2 class="pl-h2 center">{t('organ.plan.prompt')}</h2>
+              <div class="optcol">
+                {#each ORGAN_PLAN as card}
+                  <button class="pl-opt" class:done={!card.trap && planDone.has(card.id)} disabled={pumping || (!card.trap && planDone.has(card.id))} onclick={() => pickPlan(card)}>{t(card.labelKey)}</button>
+                {/each}
+              </div>
+              {#if trapActive}
+                <WatchBody text={t('organ.plan.trapWarn')} tone="rising" />
+                <div class="actions">
+                  <button class="pl-action" disabled={pumping} onclick={takeback}>{t('organ.plan.takeback')}</button>
+                </div>
+              {:else}
+                {#if planFb}<p class="fb pl-good">{t(planFb)}</p>{/if}
+                {#if planComplete}
+                  <div class="actions">
+                    <button class="pl-action" onclick={() => (beat = 'outcome')}>{t('organ.plan.done')}</button>
+                  </div>
+                {/if}
+              {/if}
             </div>
           {/if}
         </div>
       {/key}
-    </main>
-  </div>
+    </PlayShell>
+  {/if}
 </div>
 
 <style>
-  .play { position: relative; height: 100%; overflow: hidden; }
-  .cancel { position: absolute; top: 16px; inset-inline-start: 16px; z-index: 3; width: 46px; height: 46px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--dim); font-size: 18px; font-weight: 700; }
-  .stage { position: relative; z-index: 1; height: 100%; display: grid; grid-template-columns: 1fr; align-items: center; padding: 28px clamp(36px, 5vw, 80px); }
-  .content { display: flex; align-items: center; justify-content: center; min-width: 0; height: 100%; }
-  .beat { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: 100%; max-width: 760px; animation: beatin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
-  .pill { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 18px; font-size: 14px; font-weight: 700; color: var(--spm-cyan-bright); }
-  h1 { font-size: clamp(30px, 3.6vw, 46px); font-weight: 900; line-height: 1.1; }
-  h1.good { color: var(--green); } h1.warn { color: var(--grape); } h1.bad { color: var(--toxic); }
-  h2 { font-size: clamp(23px, 2.5vw, 31px); font-weight: 800; line-height: 1.2; }
-  .lead { font-size: clamp(18px, 2vw, 25px); line-height: 1.5; }
-  .big { font-size: clamp(30px, 3.4vw, 44px); font-weight: 900; }
-  .big.good { color: var(--green); } .big.bad { color: var(--toxic); }
-  .emoji { font-size: 72px; }
-  .opts { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-  .opt { text-align: start; background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 16px 22px; font-size: clamp(16px, 1.7vw, 21px); font-weight: 700; }
-  .opt:active { transform: scale(0.98); border-color: var(--spm-cyan); background: var(--surface2); }
-  .fb { font-size: clamp(18px, 2vw, 26px); font-weight: 800; line-height: 1.4; }
-  .fb.good { color: var(--green); } .fb.bad { color: var(--toxic); }
-  .lesson { font-size: 18px; line-height: 1.5; }
-  /* eGFR gauge */
-  .gauge { width: 100%; max-width: 560px; }
-  .track { position: relative; height: 26px; border-radius: 13px; overflow: hidden; display: flex; border: 1px solid var(--border); }
-  .zone { height: 100%; }
-  .zone.red { width: 33.33%; background: rgba(255, 107, 122, 0.55); }
-  .zone.yellow { width: 16.66%; background: rgba(255, 183, 3, 0.6); }
-  .zone.green { width: 50%; background: rgba(56, 224, 160, 0.5); }
-  .needle { position: absolute; top: -6px; bottom: -6px; width: 4px; background: #fff; box-shadow: 0 0 8px #fff; transform: translateX(-50%); }
-  .gval { margin-top: 6px; font-size: 16px; font-weight: 800; color: var(--grape); }
-  /* dose dial */
-  .dial { display: flex; gap: 12px; width: 100%; }
-  .notch { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px; border: 2px solid var(--border); border-radius: 16px; background: var(--surface); }
-  .notch:active { transform: scale(0.97); border-color: var(--spm-cyan); }
-  .notch.hint { border-color: var(--green); box-shadow: 0 0 16px rgba(56, 224, 160, 0.4); animation: pulse 1.8s ease-in-out infinite; }
-  .nlabel { font-size: 18px; font-weight: 800; }
-  .nmg { font-size: 13px; color: var(--dim); }
-  .trap { align-self: flex-start; background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; padding: 10px 16px; font-size: 15px; color: var(--dim); }
-  .dots { font-size: 56px; color: var(--dim); animation: pulsedots 1s ease-in-out infinite; }
-  .bins { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-  .binrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 12px; background: var(--surface); }
-  .binrow.right { border-color: var(--green); } .binrow.wrong { border-color: var(--toxic); }
-  .combo { font-size: 16px; font-weight: 700; }
-  .binbtns { display: flex; gap: 6px; flex: none; }
-  .binbtn { border: 1.5px solid var(--border); background: var(--surface2); border-radius: 10px; padding: 8px 10px; font-size: 13px; font-weight: 700; }
-  .binbtn.sel { border-color: var(--spm-cyan); background: rgba(0, 190, 202, 0.18); color: var(--spm-cyan-bright); }
-  .dyk { max-width: 680px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 22px; }
-  .dlbl { font-size: 13px; color: var(--grape); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
-  .dyk p { margin-top: 6px; font-size: 17px; line-height: 1.5; }
-  .dyk .second { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--dim); }
-  .actions { display: flex; gap: 12px; margin-top: 6px; }
-  .btn.big { padding: 18px 44px; font-size: 22px; border-radius: 18px; }
-  @keyframes beatin { from { opacity: 0; transform: translateY(20px); } }
-  @keyframes pulse { 50% { box-shadow: 0 0 26px rgba(56, 224, 160, 0.6); } }
-  @keyframes pulsedots { 50% { opacity: 0.3; } }
-  @media (prefers-reduced-motion: reduce) { .beat, .notch.hint { animation: none; } }
+  .root { position: relative; height: 100%; }
+  .beat { height: 100%; display: grid; align-content: center; justify-items: center; gap: var(--sp-4); animation: beatin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+  .scene { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); max-width: 880px; text-align: center; }
+  .scene.wide { max-width: 980px; width: 100%; }
+  .task { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); width: 100%; }
+  .center { text-align: center; }
+  .actions { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; }
+  .fb { font-size: var(--fs-h2); font-weight: 800; line-height: 1.3; max-width: 900px; text-align: center; }
+
+  .factcard { max-width: 680px; text-align: center; animation: factin 0.4s ease both; }
+  .factcard .factkick { display: inline-block; font-size: var(--fs-micro); font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: var(--spm-cyan-bright); margin-bottom: var(--sp-1); }
+  .factcard p { font-size: var(--fs-lead); line-height: 1.45; }
+
+  .optcol { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; max-width: 720px; }
+  .pl-opt.ghost { opacity: 0.75; border-style: dashed; }
+  .pl-opt.done { border-color: var(--green); background: color-mix(in srgb, var(--green) 12%, var(--surface)); }
+
+  .reveal { font-size: var(--fs-h1); font-weight: 900; line-height: 1.05; text-shadow: 0 0 26px color-mix(in srgb, var(--green) 35%, transparent); }
+  .causecard { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-3) var(--sp-6); border: 2px solid color-mix(in srgb, var(--story) 60%, transparent); border-radius: var(--r-card); background: color-mix(in srgb, var(--story) 14%, var(--surface)); box-shadow: 0 0 30px color-mix(in srgb, var(--story) 22%, transparent); }
+  .causecard .cicon { font-size: 60px; }
+  .causecard b { font-size: var(--fs-h2); font-weight: 800; }
+
+  @keyframes beatin { from { opacity: 0; transform: translateY(18px); } }
+  @keyframes factin { from { opacity: 0; transform: translateY(8px); } }
+  @media (prefers-reduced-motion: reduce) { .beat, .factcard { animation: none; } }
 </style>

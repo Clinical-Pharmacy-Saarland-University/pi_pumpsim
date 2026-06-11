@@ -4,19 +4,24 @@
   import { i18n } from './lib/locale.svelte'
   import Start from './lib/screens/Start.svelte'
   import StorySelect from './lib/screens/StorySelect.svelte'
-  import Briefing from './lib/screens/Briefing.svelte'
-  import Play from './lib/screens/Play.svelte'
   import DdiPlay from './lib/screens/DdiPlay.svelte'
   import OrganPlay from './lib/screens/OrganPlay.svelte'
   import GenePlay from './lib/screens/GenePlay.svelte'
   import WochePlay from './lib/screens/WochePlay.svelte'
   import JkPlay from './lib/screens/JkPlay.svelte'
+  import FruehstueckPlay from './lib/screens/FruehstueckPlay.svelte'
   import Resetting from './lib/screens/Resetting.svelte'
-  import Outcome from './lib/screens/Outcome.svelte'
   import Admin from './lib/screens/Admin.svelte'
   import VirtualTorso from './lib/VirtualTorso.svelte'
 
   let showAdmin = $state(false)
+  // boot warning: nag once per boot, on the Start screen, if the torso isn't
+  // initialised (not homed) — with a big jump to the admin Setup page. Cleared by
+  // initialising (homed) or dismissing.
+  let bootAck = $state(false)
+  let needInit = $derived(
+    !showAdmin && game.phase === 'start' && !!game.level && !game.level.homed && !bootAck,
+  )
   let scale = $state(1)
   let vw = $state(1280)
   let vh = $state(720)
@@ -47,8 +52,6 @@
     }
   })
 
-  const playPhases = ['dose', 'dosing', 'reveal', 'story', 'planCheck', 'mechanism', 'medcheck', 'decision', 'decided', 'variability', 'settling', 'fruits']
-
   function onKey(e: KeyboardEvent) {
     const tg = e.target as HTMLElement | null
     if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA')) return
@@ -78,20 +81,32 @@
       <Start onadmin={() => (showAdmin = true)} />
     {:else if game.phase === 'storyselect'}
       <StorySelect />
-    {:else if game.phase === 'briefing'}
-      <Briefing />
     {:else if game.phase === 'resetting'}
       <Resetting />
-    {:else if game.phase === 'outcome'}
-      <Outcome />
     {:else if game.phase === 'play2'}
-      {#if game.story?.id === 'ddi'}<DdiPlay />
+      {#if game.story?.id === 'grapefruit'}<FruehstueckPlay />
+      {:else if game.story?.id === 'ddi'}<DdiPlay />
       {:else if game.story?.id === 'organ'}<OrganPlay />
       {:else if game.story?.id === 'gene'}<GenePlay />
       {:else if game.story?.id === 'adherence'}<WochePlay />
       {:else if game.story?.id === 'johanniskraut'}<JkPlay />{/if}
-    {:else if playPhases.includes(game.phase)}
-      <Play />
+    {/if}
+
+    {#if needInit}
+      <div class="bootwarn">
+        <div class="card">
+          <div class="ico">⚠</div>
+          <h2>System not initialized</h2>
+          <p>
+            The torso state is unknown — it may still hold water from before. Initialize it before
+            the first game so the level is correct.
+          </p>
+          <button class="go" onclick={() => { showAdmin = true; bootAck = true }}>
+            ⚙ Open Setup &amp; initialize
+          </button>
+          <button class="later" onclick={() => (bootAck = true)}>Dismiss</button>
+        </div>
+      </div>
     {/if}
   </div>
   </div>
@@ -103,3 +118,66 @@
     </aside>
   {/if}
 </div>
+
+<style>
+  /* boot warning: shown over the Start screen until the torso is initialised */
+  .bootwarn {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(4, 7, 14, 0.86);
+    backdrop-filter: blur(3px);
+  }
+  .bootwarn .card {
+    width: min(560px, 86%);
+    background: var(--surface, #121a2e);
+    border: 1px solid var(--border, #2a3656);
+    border-top: 4px solid #e0a23a;
+    border-radius: 20px;
+    padding: 28px 32px 24px;
+    text-align: center;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  }
+  .bootwarn .ico {
+    font-size: 44px;
+    line-height: 1;
+  }
+  .bootwarn h2 {
+    margin: 10px 0 8px;
+    font-size: 26px;
+    color: var(--text, #e8edff);
+  }
+  .bootwarn p {
+    margin: 0 0 22px;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--dim, #9aa6c4);
+  }
+  .bootwarn .go {
+    display: block;
+    width: 100%;
+    border: none;
+    border-radius: 14px;
+    padding: 20px;
+    font-size: 20px;
+    font-weight: 800;
+    color: #04222a;
+    background: linear-gradient(120deg, var(--spm-cyan, #00beca), var(--green, #1f9d6b));
+    touch-action: manipulation;
+  }
+  .bootwarn .go:active {
+    transform: scale(0.98);
+  }
+  .bootwarn .later {
+    margin-top: 12px;
+    background: none;
+    border: none;
+    color: var(--dim, #9aa6c4);
+    font-size: 14px;
+    text-decoration: underline;
+    touch-action: manipulation;
+  }
+</style>

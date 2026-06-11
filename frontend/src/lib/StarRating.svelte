@@ -14,6 +14,12 @@
   const SLOTS = [0, 1, 2]
   // 0..1 fill for star i (i=0 is the first star): score 2.5 → [1, 1, 0.5]
   const fillOf = (i: number) => Math.max(0, Math.min(1, score - i))
+  // A geometric 50% clip of this star glyph reads too heavy because the glow and
+  // left-side points carry more visual weight. Pull fractional fills back a touch.
+  const paintOf = (i: number) => {
+    const f = fillOf(i)
+    return f > 0 && f < 1 ? f * 0.86 : f
+  }
   let title = $derived(t(rankKey(score)))
   let countLabel = $derived(t('out.stars', { n: formatStars(score) }))
 </script>
@@ -21,10 +27,13 @@
 <div class="rating" style="--sz:{size}px" role="img" aria-label={`${countLabel} — ${title}`}>
   <div class="stars">
     {#each SLOTS as i}
-      <span class="star" class:lit={fillOf(i) > 0} style="--i:{i}">
-        <span class="base">★</span>
-        <span class="fill" style="width:{fillOf(i) * 100}%"><span class="gold">★</span></span>
-      </span>
+      <span
+        class="star"
+        class:lit={fillOf(i) > 0}
+        class:full={fillOf(i) >= 1}
+        class:partial={fillOf(i) > 0 && fillOf(i) < 1}
+        style="--i:{i}; --fill:{paintOf(i) * 100}%"
+      >★</span>
     {/each}
   </div>
   {#if showTitle}
@@ -54,22 +63,17 @@
     display: inline-block;
     width: 1em;
     height: 1em;
+    background: linear-gradient(90deg, var(--grape) 0 var(--fill), rgba(255, 255, 255, 0.17) var(--fill) 100%);
+    background-clip: text;
+    color: transparent;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
-  /* empty track */
-  .base {
-    color: var(--surface2);
-    display: block;
+  .star.full {
+    filter: drop-shadow(0 0 12px rgba(255, 183, 3, 0.42));
   }
-  /* gold overlay, clipped to the fill width → supports half stars */
-  .fill {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    white-space: nowrap;
-  }
-  .gold {
-    color: var(--grape);
-    text-shadow: 0 0 18px rgba(255, 183, 3, 0.55);
+  .star.partial {
+    filter: drop-shadow(0 0 5px rgba(255, 183, 3, 0.18));
   }
   .star.lit {
     animation: pop 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both;
