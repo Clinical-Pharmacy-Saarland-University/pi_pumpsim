@@ -75,6 +75,7 @@ const de: Record<string, string> = {
   'reset.title': 'Patient wird vorbereitet …',
   'reset.sub': 'Der Spiegel wird zurückgesetzt.',
   'reset.eta': 'noch etwa {s} s',
+  'reset.almost': 'gleich fertig …',
 
   // band + bar
   'band.explain': 'Grüner Bereich = sicher · zu wenig wirkt nicht · zu viel ist gefährlich',

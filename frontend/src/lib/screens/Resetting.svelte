@@ -3,22 +3,24 @@
   import { game } from '../game.svelte'
   import Backdrop from '../Backdrop.svelte'
 
-  // Real-hardware reset takes a while (drain → prime), so count down from the backend's
-  // estimated total (empty + prime). On the mock pump it settles instantly, so we show
-  // no countdown — the $effect only arms on the real backend with a meaningful ETA.
+  // Real-hardware reset takes a while (drain → prime), so count down to the backend's
+  // estimated finish DEADLINE (absolute time, set when the re-home actually started). On
+  // the mock pump it settles instantly, so we show no countdown — the $effect only arms on
+  // the real backend with a meaningful ETA. Using a deadline (not a fresh start each mount)
+  // keeps it accurate when a background pre-home has already been draining for a while.
   let remaining = $state<number | null>(null)
   $effect(() => {
-    const eta = game.prepareEtaS
-    if (game.level?.backend !== 'real' || eta < 1.5) {
+    const deadline = game.prepareDeadline
+    if (game.level?.backend !== 'real' || game.prepareEtaS < 1.5 || deadline <= 0) {
       remaining = null
       return
     }
-    const start = performance.now()
-    remaining = eta
-    const id = setInterval(() => {
-      const left = eta - (performance.now() - start) / 1000
+    const tick = () => {
+      const left = (deadline - performance.now()) / 1000
       remaining = left > 0 ? left : 0
-    }, 250)
+    }
+    tick()
+    const id = setInterval(tick, 250)
     return () => clearInterval(id)
   })
 </script>
@@ -31,7 +33,11 @@
       <h1>{t('reset.title')}</h1>
       <p>{t('reset.sub')}</p>
       {#if remaining !== null}
-        <p class="eta">{t('reset.eta', { s: Math.ceil(remaining) })}</p>
+        {#if remaining > 0.5}
+          <p class="eta">{t('reset.eta', { s: Math.ceil(remaining) })}</p>
+        {:else}
+          <p class="eta">{t('reset.almost')}</p>
+        {/if}
       {/if}
     </main>
   </div>

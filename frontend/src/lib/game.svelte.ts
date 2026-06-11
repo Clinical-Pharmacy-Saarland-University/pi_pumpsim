@@ -22,6 +22,13 @@ export const game = $state({
   // estimated total seconds for the current between-runs reset (empty + prime), from
   // the backend plan — the "Patient wird vorbereitet" screen counts down from it. 0 = unknown.
   prepareEtaS: 0,
+  // absolute deadline (performance.now() ms) the reset is expected to finish at; the
+  // Resetting screen counts down to THIS so it stays accurate even when a background
+  // pre-home has already been draining for a while. 0 = unknown.
+  prepareDeadline: 0,
+  // bumped on every story start so App.svelte can {#key} the play component and force a
+  // fresh remount even on a same-story retry (where game.phase stays 'play2').
+  runNonce: 0,
 })
 
 // two independent settle-waiters: `wait` for the between-runs re-home (prepare),
@@ -40,7 +47,28 @@ export function driveTo(target: number, rate: number | undefined, then: () => vo
     extWait = null
     setTimeout(then, 450)
   } else {
-    extWait = { target, then, armed: false }
+    const w = { target, then, armed: false }
+    extWait = w
+    // Watchdog: a story drive's settle is driven only by WS snapshots (onLevel). If the
+    // backend crashes/restarts mid-drive (or the WS dies and never recovers), the settle
+    // never arrives, `pumping` stays true and the beat wedges with its buttons disabled.
+    // Resolve anyway after a generous bound (mirrors prepareThen's grace fallback). Sized
+    // to the EFFECTIVE travel time — the pump caps the move at its calibrated rate, so we
+    // derive units/s from telemetry when available and never below the requested rate.
+    const reqRate = rate && rate > 0 ? rate : 4
+    const lvl = game.level
+    const pumpUnits =
+      lvl && lvl.torso_volume_ml > 0 && lvl.pump_rate_ml_s > 0
+        ? (lvl.pump_rate_ml_s / lvl.torso_volume_ml) * 100
+        : reqRate
+    const effRate = Math.max(0.5, Math.min(reqRate, pumpUnits))
+    const watchdogMs = (Math.abs(target - cur) / effRate) * 1000 + 8000
+    setTimeout(() => {
+      if (extWait === w) {
+        extWait = null
+        w.then()
+      }
+    }, watchdogMs)
   }
 }
 
@@ -84,7 +112,13 @@ function onLevel(s: LevelState) {
 
 export function init(): () => void {
   api.reset()
-  return connectLevel(onLevel, (c) => (game.connected = c))
+  return connectLevel(onLevel, (c) => {
+    game.connected = c
+    // On (re)connect, if a story drive is still pending, re-assert its target so a
+    // backend that restarted mid-drive resumes moving toward it (the driveTo watchdog
+    // covers the case where it doesn't). Harmless on the first connect (extWait null).
+    if (c && extWait) api.setTarget(extWait.target)
+  })
 }
 
 // --- start / navigation ---
@@ -107,6 +141,10 @@ export function selectStory(story: Story): void {
   if (!story.available) return
   game.story = story
   game.patient = story.patient
+  // bump the run nonce BEFORE entering play2 so the {#key} in App.svelte forces a fresh
+  // remount — even on a same-story retry, where game.phase is already 'play2' (so the
+  // {#if} alone would not re-create the component and the old beat='outcome' would stick).
+  game.runNonce += 1
   game.phase = 'play2'
 }
 
@@ -119,6 +157,19 @@ export function selectStory(story: Story): void {
 // `preHomeIssued` tracks it so prepareThen never double-drains: if it already
 // finished we skip the wait entirely; if it's still running we ride it out.
 let preHomeIssued = false
+// timestamp (performance.now()) of the last accepted nav, to debounce re-taps. A
+// touchscreen double-tap / two-finger tap dispatches two clicks a few ms apart; the
+// fast path runs `next()` synchronously WITHOUT entering 'resetting', so the phase guard
+// below can't catch the second tap — this time gate does.
+let lastNavAt = -1e9
+const NAV_DEBOUNCE_MS = 600
+
+// Capture the backend plan's ETA as both seconds and an absolute deadline (so the
+// Resetting countdown stays accurate even after a background pre-home has been draining).
+function applyPreparePlan(p: { empty_s: number; prime_s: number }): void {
+  game.prepareEtaS = p.empty_s + p.prime_s
+  game.prepareDeadline = performance.now() + game.prepareEtaS * 1000
+}
 
 // Start the between-runs re-home early, without leaving the current phase (the
 // outcome screen stays up; on real hardware the tank drains in the background).
@@ -127,10 +178,23 @@ export function preHome(): void {
   if (preHomeIssued) return
   preHomeIssued = true
   game.prepareEtaS = 0
-  api.prepare().then((p) => (game.prepareEtaS = p.empty_s + p.prime_s)).catch(() => {})
+  game.prepareDeadline = 0
+  // On failure, clear the flag so the next prepareThen still issues a real reset (a stuck
+  // preHomeIssued=true would make it skip BOTH the fast path and the issue-prepare block).
+  api.prepare().then(applyPreparePlan).catch(() => {
+    preHomeIssued = false
+  })
 }
 
 function prepareThen(next: () => void): void {
+  // A reset is already in flight (its blocking "Patient wird vorbereitet" screen is up),
+  // or a nav was just accepted. Ignore re-taps so a double-press (e.g. two-finger tap on
+  // ← / Nochmal) can't issue a second prepare or bounce through the reset screen.
+  if (game.phase === 'resetting' || performance.now() - lastNavAt < NAV_DEBOUNCE_MS) return
+  lastNavAt = performance.now()
+  // Abandon any pending story-move callback (an aborted mid-drive via ✕) so it can't fire
+  // during or after the reset and poke an unmounted story.
+  extWait = null
   const st = game.level
   // a background pre-home already settled at baseline → no reset wait, jump through
   if (preHomeIssued && st?.homed && !st.moving && !st.pump_busy) {
@@ -143,7 +207,8 @@ function prepareThen(next: () => void): void {
     // fresh reset → issue it and capture the ETA for the countdown. (An in-flight
     // pre-home already set prepareEtaS; ride it out without restarting.)
     game.prepareEtaS = 0
-    api.prepare().then((p) => (game.prepareEtaS = p.empty_s + p.prime_s)).catch(() => {})
+    game.prepareDeadline = 0
+    api.prepare().then(applyPreparePlan).catch(() => {})
   }
   preHomeIssued = false
   const w = { next, armed: false }

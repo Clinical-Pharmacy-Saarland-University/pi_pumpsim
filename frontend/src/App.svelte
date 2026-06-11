@@ -84,12 +84,16 @@
     {:else if game.phase === 'resetting'}
       <Resetting />
     {:else if game.phase === 'play2'}
-      {#if game.story?.id === 'grapefruit'}<FruehstueckPlay />
-      {:else if game.story?.id === 'ddi'}<DdiPlay />
-      {:else if game.story?.id === 'organ'}<OrganPlay />
-      {:else if game.story?.id === 'gene'}<GenePlay />
-      {:else if game.story?.id === 'adherence'}<WochePlay />
-      {:else if game.story?.id === 'johanniskraut'}<JkPlay />{/if}
+      <!-- key on runNonce so a same-story retry (phase stays 'play2') still fully
+           remounts the play component, resetting its internal beat/state -->
+      {#key game.runNonce}
+        {#if game.story?.id === 'grapefruit'}<FruehstueckPlay />
+        {:else if game.story?.id === 'ddi'}<DdiPlay />
+        {:else if game.story?.id === 'organ'}<OrganPlay />
+        {:else if game.story?.id === 'gene'}<GenePlay />
+        {:else if game.story?.id === 'adherence'}<WochePlay />
+        {:else if game.story?.id === 'johanniskraut'}<JkPlay />{/if}
+      {/key}
     {/if}
 
     {#if needInit}
