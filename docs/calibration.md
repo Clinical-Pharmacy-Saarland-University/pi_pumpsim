@@ -29,9 +29,9 @@ duty→flow `samples`, and `dead_space_ml`. It's **per-machine + gitignored**, l
 (`rate_in` is applied to the pump). To inspect or back it up:
 - `cat ~/pi_pumpsim/backend/calibration.json`
 - `scp -i ~/.ssh/pumpsim dose@<pi-ip>:~/pi_pumpsim/backend/calibration.json .`
-- **Default in git:** `backend/calibration.default.json` is the committed baseline, used when no
-  local `calibration.json` exists. To make your measured numbers the default for every machine:
-  `cp backend/calibration.json backend/calibration.default.json` and commit it.
+- **Default in git:** the committed baseline lives in `backend/app/game/calibration.py` (the
+  `DEFAULT` dict), used when no local `calibration.json` exists. To make your measured numbers the
+  default for every machine, paste the values from your `calibration.json` into `DEFAULT` and commit.
 
 The manual steps below are the underlying procedure — use them by hand or to cross-check a number.
 
@@ -92,9 +92,9 @@ Goal: the **taped band** must sit where the game thinks `55–70` is.
    It persists to `calibration.json`, feeds the ml read-outs (admin + dev virtual torso) and,
    later, the model-follower's ml↔level conversion.
 
-> Until measured, the committed defaults assume **40 ml/s @ 100 %** (both directions) and a
-> **1 800 ml** torso (`backend/calibration.default.json`) so the mock/virtual torso is
-> physically plausible out of the box.
+> The committed defaults (`DEFAULT` in `backend/app/game/calibration.py`) are the measured
+> real-torso numbers — **~41.9 / 41.3 ml/s @ 100 %** (in / out) and a **1 800 ml** torso — so the
+> mock/virtual torso is physically plausible out of the box.
 
 ## 5b. Tube dead-space (optional — for later)
 With a peristaltic pump the **tubing** holds liquid that never reaches the torso. Two numbers matter

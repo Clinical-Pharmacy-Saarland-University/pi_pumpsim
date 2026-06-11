@@ -92,9 +92,10 @@ backend/                    Python 3.13, FastAPI + uvicorn
   app/config.py             Settings from .env (PUMP_BACKEND, tick_hz, IBT-2 pins, pump rate…)
   app/game/controller.py    LevelController — the torso twin (level→target, band, zones) ★pure, tested
   app/game/runner.py        async loop: tick controller, drive pump; manual mode + pump sequences
-  app/game/calibration.py   load/persist calibration.json (deadband, rates, torso volume, reset params)
+  app/game/calibration.py   load/persist calibration.json + DEFAULT = committed baseline
+                            (deadband, rates, torso volume, reset params); per-machine
+                            override = calibration.json (gitignored)
   app/hardware/             Pump HAL: pump.py (iface) · mock_pump.py · real_pump.py (IBT-2 hw-PWM) · factory.py
-  calibration.default.json  committed baseline (per-machine override = calibration.json, gitignored)
   tests/                    pytest (controller · mock pump · runner/sequence · calibration)
 frontend/                   Vite + Svelte 5 (runes) + TS
   src/App.svelte            device frame + screen router + dev VirtualTorso panel; routes to Admin
@@ -110,7 +111,7 @@ frontend/                   Vite + Svelte 5 (runes) + TS
                             Outcome, Resetting, Admin, CalibWizard
 deploy/                     Pi kiosk: install.sh (+ pwm overlay/udev), update.sh, systemd units, sway config
 tools/pump_test.py          standalone IBT-2 pump bench (no project deps)
-docs/game-design.md         living design doc (§19); docs/stories/ specs + STATUS; docs/mockups/
+docs/game-design.md         living design doc (§19); docs/stories/ specs + STATUS
 docs/calibration.md         pump + torso calibration protocol (run from the on-screen admin)
 justfile                    dev task runner
 ```
@@ -171,12 +172,13 @@ just tag 0.0.1-alpha  # write VERSION, commit, annotated tag v0.0.1-alpha + push
 ## Open work (rough priority)
 
 1. **Pump calibration + control** — ✅ bench (`tools/pump_test.py`), `RealPump` (hardware PWM,
-   3.3 V VCC, active-high, enable-gated), on-screen **admin**, **guided calibration wizard**, and
-   the **home-then-dose reset** (empty/overpump → prime a known volume) are done. Remaining:
-   (a) run the wizard on the **real torso** and commit the numbers to `calibration.default.json`;
-   (b) the **model-follower** in the runner (drive the pump so the real torso tracks the computed
-   target, using deadband + per-direction rate); (c) wire **Kalibrierter Reset** into the
-   „Patient wird vorbereitet …" between-runs screen. Protocol: [`docs/calibration.md`](docs/calibration.md).
+   3.3 V VCC, active-high, enable-gated), on-screen **admin**, **guided calibration wizard**, the
+   **home-then-dose reset** (empty/overpump → prime a known volume), the **real-torso calibration**
+   (committed as `DEFAULT` in `app/game/calibration.py`), and the **model-follower** in the runner
+   (drives the pump so the torso tracks the computed target, using deadband + per-direction rate +
+   interpolated duty→flow samples) are done. Remaining: (a) wire **Kalibrierter Reset** into the
+   „Patient wird vorbereitet …" between-runs screen; (b) measure `dead_space_ml` on the real rig
+   (currently null → no tube compensation). Protocol: [`docs/calibration.md`](docs/calibration.md).
 2. **i18n**: real EN / FR / NL / AR dictionaries (AR also needs RTL); verify drug/Fachinfo wording.
 3. **Feel-tuning** (drift speed, band width, dose levels) once the real torso is calibrated.
 4. Optional: an LED strip inside the torso (green/red glow), sound, age-adaptive wording.

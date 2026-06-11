@@ -36,6 +36,62 @@
   let cal = $state<Record<string, any> | null>(null)
   const loadCal = () => api.admin.getCalibration().then((c) => (cal = c)).catch(() => {})
 
+  // edit a single calibration field (via NumPad) and persist it (merge-save), then refresh
+  async function saveCal(patch: Record<string, number | null>) {
+    await api.admin.saveCalibration(patch).catch(() => {})
+    await loadCal()
+  }
+
+  // --- dead-space measurement: two-run difference (flushed tube vs dry tube) -----
+  // Pump the SAME timed IN run twice — once with the line FULL, once DRY. The torso
+  // gets `dead_space` less on the dry run (the tube swallows its own volume first), so
+  // the difference in torso fill (weigh each, 1 g ≈ 1 ml) IS the dead-space. No reliance
+  // on absolute flow accuracy: the two identical runs cancel the rate.
+  type DsStep = 'idle' | 'runA' | 'measA' | 'runB' | 'measB' | 'done'
+  let ds = $state<{ step: DsStep; duty: number; secs: number; a: number | null; b: number | null; left: number }>(
+    { step: 'idle', duty: 60, secs: 10, a: null, b: null, left: 0 },
+  )
+  let dsTimer: ReturnType<typeof setInterval> | null = null
+  let dsResult = $derived(ds.a != null && ds.b != null ? Math.round((ds.a - ds.b) * 10) / 10 : null)
+
+  const dsClearTimer = () => {
+    if (dsTimer) clearInterval(dsTimer)
+    dsTimer = null
+    ds.left = 0
+  }
+  function dsStop() {
+    dsClearTimer()
+    api.admin.stop().catch(() => {})
+  }
+  function dsReset() {
+    dsStop()
+    ds = { step: 'idle', duty: ds.duty, secs: ds.secs, a: null, b: null, left: 0 }
+  }
+  // timed IN run; advance to `next` when it finishes (the backend auto-stops the pump)
+  function dsRun(next: DsStep) {
+    dsClearTimer()
+    api.admin.run('in', ds.duty / 100, ds.secs).catch(() => {})
+    ds.left = ds.secs
+    dsTimer = setInterval(() => {
+      ds.left = Math.max(0, ds.left - 1)
+      if (ds.left <= 0) {
+        dsClearTimer()
+        ds.step = next
+      }
+    }, 1000)
+  }
+  // hold-to-pump for priming (IN) / drying (OUT) the line between runs
+  const dsHold = (dir: Dir) => api.admin.pump(dir, ds.duty / 100).catch(() => {})
+  const dsRelease = () => api.admin.stop().catch(() => {})
+  const dsSetDuty = () =>
+    openPad('Run duty %', ' %', (v) => (ds.duty = Math.max(1, Math.min(100, Math.round(v)))))
+  const dsSetSecs = () =>
+    openPad('Run seconds', ' s', (v) => (ds.secs = Math.max(1, Math.min(60, Math.round(v)))))
+  const dsEnterA = () =>
+    openPad('Torso fill A — flushed (ml)', ' ml', (v) => { ds.a = v; ds.step = 'runB' })
+  const dsEnterB = () =>
+    openPad('Torso fill B — dry (ml)', ' ml', (v) => { ds.b = v; ds.step = 'done' })
+
   // the re-home plan (derived empty/prime durations) for the Reset tab
   let plan = $state<PreparePlan | null>(null)
   const loadPlan = () => api.admin.preparePlan().then((p) => (plan = p)).catch(() => {})
@@ -63,6 +119,7 @@
     healthTimer = setInterval(pollHealth, 3000)
     return () => {
       clearTimed()
+      dsClearTimer()
       if (healthTimer) clearInterval(healthTimer)
       if (powerTimer) clearTimeout(powerTimer)
       if (autoSim) api.dev.clearSim().catch(() => {})
@@ -304,18 +361,88 @@
       </p>
 
       <div class="block">
-        <div class="bhead">Current calibration</div>
+        <div class="bhead">Current calibration <span class="dim">· tap a ✎ value to edit</span></div>
         <div class="vgrid">
           <div><span>Deadband IN</span><b>{dutyPct(cal?.deadband_in)}</b></div>
           <div><span>Deadband OUT</span><b>{dutyPct(cal?.deadband_out)}</b></div>
           <div><span>Rate IN</span><b>{val(cal?.rate_in, ' ml/s')}</b></div>
           <div><span>Rate OUT</span><b>{val(cal?.rate_out, ' ml/s')}</b></div>
-          <div><span>Torso volume</span><b>{val(cal?.torso_volume_ml, ' ml')}</b></div>
-          <div><span>Dead space</span><b>{val(cal?.dead_space_ml, ' ml')}</b></div>
+          <button class="vedit" onclick={() => openPad('Torso volume', ' ml', (v) => saveCal({ torso_volume_ml: v }))}>
+            <span>Torso volume ✎</span><b>{val(cal?.torso_volume_ml, ' ml')}</b>
+          </button>
+          <button class="vedit" onclick={() => openPad('Dead space', ' ml', (v) => saveCal({ dead_space_ml: v }))}>
+            <span>Dead space ✎</span><b>{val(cal?.dead_space_ml, ' ml')}</b>
+          </button>
+          <button class="vedit" onclick={() => openPad('Overpump margin', ' ml', (v) => saveCal({ overpump_ml: v }))}>
+            <span>Overpump ✎</span><b>{val(cal?.overpump_ml, ' ml')}</b>
+          </button>
+          <button class="vedit" onclick={() => openPad('Prime duty', ' %', (v) => saveCal({ prime_duty: Math.max(5, Math.min(100, v)) / 100 }))}>
+            <span>Prime duty ✎</span><b>{dutyPct(cal?.prime_duty)}</b>
+          </button>
           <div><span>Empty time</span><b>{val(cal?.empty_overpump_s, ' s')}</b></div>
           <div><span>Prime</span><b>{val(cal?.prime_in_ml, ' ml')}</b></div>
           <div><span>Flow samples</span><b>{cal?.samples?.length ?? 0}</b></div>
         </div>
+      </div>
+
+      <div class="block">
+        <div class="bhead">Measure dead space <span class="dim">· two-run difference</span></div>
+        <div class="dsrow">
+          <button class="dscfg" onclick={dsSetDuty}>Duty <b>{ds.duty}%</b></button>
+          <button class="dscfg" onclick={dsSetSecs}>Run <b>{ds.secs}s</b></button>
+          {#if ds.step !== 'idle'}<button class="dsrestart" onclick={dsReset}>↺ Restart</button>{/if}
+        </div>
+
+        {#if ds.step === 'idle'}
+          <p class="hint dsleft">
+            Pumps the same {ds.secs}s IN run twice — once with the tube <b>full</b>, once <b>dry</b>.
+            The tube swallows its own volume on the dry run, so the difference in torso fill (weigh
+            each, 1 g ≈ 1 ml) is the dead-space. Start each run from an empty torso.
+          </p>
+          <button class="dsgo" onclick={() => (ds.step = 'runA')}>① Begin</button>
+        {:else if ds.step === 'runA' || ds.step === 'runB'}
+          {@const isA = ds.step === 'runA'}
+          <p class="hint dsleft">
+            {#if isA}
+              <b>Run A — flushed:</b> make sure the line is <b>full of water</b> (hold ▲ to prime),
+              torso empty, then run.
+            {:else}
+              <b>Run B — dry:</b> empty the torso and run the line <b>dry</b> (hold ▼ until it pulls
+              air), then run.
+            {/if}
+          </p>
+          <div class="dsprime">
+            <button onpointerdown={() => dsHold('in')} onpointerup={dsRelease} onpointerleave={dsRelease} onpointercancel={dsRelease}>▲ Prime (IN)</button>
+            <button onpointerdown={() => dsHold('out')} onpointerup={dsRelease} onpointerleave={dsRelease} onpointercancel={dsRelease}>▼ Dry (OUT)</button>
+          </div>
+          {#if ds.left > 0}
+            <div class="runrow">
+              <div class="runinfo">Running ▲ IN @ {ds.duty}% · {ds.left}s left</div>
+              <button class="stop" onclick={dsStop}>■ Stop</button>
+            </div>
+          {:else}
+            <button class="dsgo" onclick={() => dsRun(isA ? 'measA' : 'measB')}>
+              ▶ Run {isA ? 'A' : 'B'} — IN {ds.secs}s @ {ds.duty}%
+            </button>
+          {/if}
+        {:else if ds.step === 'measA' || ds.step === 'measB'}
+          {@const isA = ds.step === 'measA'}
+          <p class="hint dsleft">
+            Drain the torso and weigh the water added on run {isA ? 'A' : 'B'} (1 g ≈ 1 ml), then enter it.
+          </p>
+          <button class="dsgo" onclick={isA ? dsEnterA : dsEnterB}>Enter fill {isA ? 'A (flushed)' : 'B (dry)'} …</button>
+        {:else if ds.step === 'done'}
+          <div class="vgrid dsvg">
+            <div><span>Fill A · flushed</span><b>{val(ds.a, ' ml')}</b></div>
+            <div><span>Fill B · dry</span><b>{val(ds.b, ' ml')}</b></div>
+          </div>
+          <p class="dsresult">Dead space = A − B = <b>{dsResult ?? '–'} ml</b></p>
+          {#if dsResult != null && dsResult >= 0}
+            <button class="dsgo save" onclick={() => { if (dsResult != null) saveCal({ dead_space_ml: dsResult }); dsReset() }}>✓ Save {dsResult} ml as dead space</button>
+          {:else}
+            <p class="hint">Fill A should exceed B (the dry run delivers less). Re-check and restart.</p>
+          {/if}
+        {/if}
       </div>
     {:else if tab === 'setup'}
       <div class="block trust" class:homed={game.level?.homed}>
@@ -817,6 +944,117 @@
   }
   .vgrid b {
     font-size: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* editable calibration cells (tap → NumPad) */
+  .vgrid button.vedit {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    background: rgba(0, 190, 202, 0.1);
+    border: 1px solid var(--spm-cyan, #00beca);
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: #e8edff;
+    text-align: left;
+  }
+  .vgrid button.vedit:active {
+    transform: scale(0.98);
+  }
+  .vgrid button.vedit span {
+    font-size: 12px;
+    color: var(--spm-cyan, #00beca);
+  }
+  .vgrid button.vedit b {
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* dead-space measurement tool */
+  .dsrow {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .dscfg {
+    flex: 1;
+    background: #1b2440;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 0;
+    color: var(--dim);
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .dscfg b {
+    color: #e8edff;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .dsrestart {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--dim);
+    font-weight: 700;
+  }
+  .dsleft {
+    text-align: left;
+  }
+  .dsgo {
+    width: 100%;
+    background: linear-gradient(120deg, var(--spm-cyan, #00beca), var(--green, #1f9d6b));
+    color: #04222a;
+    border: none;
+    border-radius: 12px;
+    padding: 16px;
+    font-weight: 800;
+    font-size: 16px;
+    margin-top: 10px;
+  }
+  .dsgo.save {
+    background: var(--green, #1f9d6b);
+    color: #fff;
+  }
+  .dsprime {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .dsprime button {
+    padding: 16px 0;
+    border-radius: 12px;
+    font-weight: 800;
+    color: #fff;
+    border: none;
+    touch-action: none;
+  }
+  .dsprime button:first-child {
+    background: #1f9d6b;
+  }
+  .dsprime button:last-child {
+    background: #3b7bd6;
+  }
+  .dsprime button:active {
+    transform: scale(0.97);
+  }
+  .dsvg {
+    margin-bottom: 8px;
+  }
+  .dsresult {
+    margin: 10px 0 0;
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    color: #e8edff;
+  }
+  .dsresult b {
+    color: var(--spm-cyan, #00beca);
+    font-size: 20px;
     font-variant-numeric: tabular-nums;
   }
 

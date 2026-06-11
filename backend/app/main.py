@@ -91,6 +91,8 @@ class CalibrationModel(BaseModel):
     rate_out: float | None = Field(default=None, ge=0)
     torso_volume_ml: float | None = Field(default=None, gt=0)
     dead_space_ml: float | None = Field(default=None, ge=0)
+    overpump_ml: float | None = Field(default=None, ge=0, le=2000)
+    prime_duty: float | None = Field(default=None, gt=0, le=1)
     empty_overpump_s: float | None = Field(default=None, gt=0, le=600)
     prime_in_ml: float | None = Field(default=None, ge=0)
     samples: list[CalibSample] = Field(default_factory=list)
@@ -117,24 +119,42 @@ def reset_level() -> dict:
     return {"ok": True}
 
 
-def _prepare_plan() -> dict:
-    """Compute the re-home plan: how long to overpump empty and to prime back to
-    baseline. Durations are DERIVED from torso volume ÷ flow rates (empty gets a
-    1.3× safety margin so it overpumps past empty); a stored empty_overpump_s /
-    prime_in_ml in the calibration acts as a manual override."""
+def _prepare_plan(from_level: float | None = None) -> dict:
+    """Compute the re-home plan: how much to overpump OUT (empty) and to prime IN.
+
+    The drain is an ABSOLUTE volume — we trust the tracked level, so there's no ratio:
+
+        empty_ml = water_ml + dead_space_ml + overpump_ml
+
+    where `water_ml` is the water we believe is in the torso, `dead_space_ml` clears the
+    tube, and `overpump_ml` (calibration, default 100 ml) is a fixed safety margin that
+    pulls a little air at the tail to guarantee empty.
+
+    `from_level` is how full the torso is assumed to be:
+      * None → a FULL torso (water = capacity): the robust trust-reset used by first-boot
+        Initialize and the marking Home, since the level isn't trusted.
+      * a level 0..capacity → the KNOWN end-of-run level (the twin is homed). A
+        between-runs reset only drains that much (+ dead + overpump), so it's much faster.
+    Prime is identical either way: the overpump leaves the torso empty, so it always
+    re-primes the tube dead-space + baseline volume.
+    """
     cal = load_calibration()
     r = _runner()
     vol = float(r.volume_ml or 0.0)
     rate_out = float(r.rate_out_ml_s or 0.0)
     rate_in = float(r.rate_in_ml_s or 0.0)
     dead = float(cal.get("dead_space_ml") or 0.0)
+    overpump = float(cal.get("overpump_ml") or 0.0)
     cap = float(r.ctrl.cfg.capacity or 100.0)
     baseline = float(r.ctrl.cfg.baseline or 0.0)
 
-    if cal.get("empty_overpump_s"):
-        empty_s, empty_src = float(cal["empty_overpump_s"]), "override"
-    elif rate_out > 0 and vol > 0:
-        empty_s, empty_src = vol / rate_out * 1.3, "derived"
+    # water to remove: a full torso (trust-reset) or the known level (fast between-runs prep)
+    drain_level = cap if from_level is None else max(0.0, min(cap, float(from_level)))
+    water_ml = (drain_level / cap * vol) if cap else 0.0
+    empty_ml = water_ml + dead + overpump  # torso water + tube + absolute safety margin
+    if rate_out > 0:
+        empty_s = empty_ml / rate_out
+        empty_src = "derived" if from_level is None else "from_level"
     else:
         empty_s, empty_src = 90.0, "fallback"
 
@@ -142,23 +162,34 @@ def _prepare_plan() -> dict:
         prime_ml, prime_src = float(cal["prime_in_ml"]), "override"
     else:
         prime_ml, prime_src = (baseline / cap * vol if cap else 0.0), "derived"
-    prime_s = (prime_ml + dead) / rate_in if rate_in > 0 else 0.0
-    # seconds to re-prime just the tube dead-space (Home runs this after the overpump
-    # so the line is full to the torso entry — keeps goto/prepare fills accurate)
+    # prime gently so the inflow doesn't splash: run IN at `prime_duty` and size the
+    # duration to the (slower, sample-interpolated) flow AT that duty, not the full rate.
+    prime_duty = float(cal.get("prime_duty") or 1.0)
+    prime_flow = r.flow_ml_s("in", prime_duty)
+    if prime_flow <= 0:  # duty below the deadband / uncalibrated → fall back to full duty
+        prime_duty, prime_flow = 1.0, (r.flow_ml_s("in", 1.0) or rate_in)
+    prime_s = (prime_ml + dead) / prime_flow if prime_flow > 0 else 0.0
+    # the tube re-prime (Home) is just the dead-space at full duty (small, no torso splash)
     tube_prime_s = dead / rate_in if rate_in > 0 else 0.0
 
     return {
         "empty_s": round(empty_s, 1),
         "empty_src": empty_src,
+        "water_ml": round(water_ml, 1),
+        "overpump_ml": round(overpump, 1),
+        "empty_ml": round(empty_ml, 1),
+        "from_level": round(drain_level, 1),
         "prime_ml": round(prime_ml, 1),
         "prime_s": round(prime_s, 1),
         "prime_src": prime_src,
+        "prime_duty": round(prime_duty, 3),
         "tube_prime_s": round(tube_prime_s, 1),
         "dead_space_ml": round(dead, 1),
         "baseline": baseline,
         "volume_ml": round(vol, 1),
         "rate_in": round(rate_in, 1),
         "rate_out": round(rate_out, 1),
+        "eta_s": round(empty_s + prime_s, 1),
         "backend": settings.pump_backend,
     }
 
@@ -168,13 +199,23 @@ def get_prepare_plan() -> dict:
     return _prepare_plan()
 
 
+class PrepareRequest(BaseModel):
+    full: bool = False
+
+
 @app.post("/api/level/prepare")
-def prepare_torso() -> dict:
-    """Re-home the torso to a known start (overpump empty → prime to baseline →
-    snap the twin). First-boot prep, between-runs prep, and admin recovery all use
-    this single routine. Mock just settles the twin at baseline."""
-    plan = _prepare_plan()
-    _runner().prepare(plan["empty_s"], plan["prime_s"])
+def prepare_torso(req: PrepareRequest | None = None) -> dict:
+    """Re-home the torso to a known start (overpump empty → prime to baseline → snap).
+
+    Between runs the twin is homed, so we drain only the KNOWN end-of-run volume — a
+    much faster reset. First boot / recovery (not homed) or an explicit {"full": true}
+    drains a full torso (the robust trust-reset). Mock just settles the twin at baseline.
+    """
+    r = _runner()
+    full = bool(req.full) if req else False
+    from_level = None if (full or not r.homed) else r.ctrl.level
+    plan = _prepare_plan(from_level)
+    r.prepare(plan["empty_s"], plan["prime_s"], plan["prime_duty"])
     return {"ok": True, **plan}
 
 
@@ -185,7 +226,7 @@ def prime_torso() -> dict:
     /prepare for when the operator drains the torso manually. Mock settles the twin
     at baseline."""
     plan = _prepare_plan()
-    _runner().prime_to_baseline(plan["prime_s"])
+    _runner().prime_to_baseline(plan["prime_s"], plan["prime_duty"])
     return {"ok": True, **plan}
 
 

@@ -23,9 +23,9 @@ class Settings(BaseSettings):
     pump_in_is_rpwm: bool = False    # our pump: IN=LPWM/GPIO13, OUT=RPWM/GPIO12 (flip to swap)
     pump_pwm_hz: int = 20000         # inaudible; RP1 hardware PWM handles it cleanly
     pump_pwm_chip: str = "auto"      # "auto" detects RP1 (trixie/6.12 = pwmchip0)
-
-    # calibration: full-speed (100% duty) flow rate, ml/s
-    pump_rate_ml_s: float = 2.0
+    # NOTE: pump FLOW RATE is intentionally NOT here. It lives in the calibration
+    # (app/game/calibration.py DEFAULT + calibration.json: rate_in/rate_out) so there
+    # is a single source of truth; the runner applies it to the pump at boot.
 
 
 settings = Settings()

@@ -16,14 +16,25 @@
 
   <div class="grid">
     {#each STORIES as s, i}
-      <!-- all cards look playable; unbuilt stories are a no-op on press for now
-           (selectStory early-returns while story.available is false) -->
-      <button class="card" style="--c:{s.color}; --i:{i}" onclick={() => selectStory(s)}>
+      <!-- only available stories are playable; the rest are disabled and show a
+           „coming soon" stamp (selectStory also early-returns while !available) -->
+      <button
+        class="card"
+        class:soon={!s.available}
+        style="--c:{s.color}; --i:{i}"
+        disabled={!s.available}
+        aria-disabled={!s.available}
+        onclick={() => selectStory(s)}
+      >
         <span class="watermark">{s.icon}</span>
         <span class="chip">{s.icon}</span>
         <span class="title">{t(s.titleKey)}</span>
         <span class="desc">{t(s.descKey)}</span>
-        <span class="badge play" aria-hidden="true">▶</span>
+        {#if s.available}
+          <span class="badge play" aria-hidden="true">▶</span>
+        {:else}
+          <span class="stamp">🔒 {t('stories.soon')}</span>
+        {/if}
       </button>
     {/each}
   </div>
@@ -176,6 +187,48 @@
     font-size: 21px;
     padding-left: 3px;
     box-shadow: 0 6px 18px rgba(0, 190, 202, 0.5);
+  }
+
+  /* ---- „coming soon" (not yet playable) -------------------------------- */
+  .card.soon {
+    cursor: default;
+    opacity: 0.6;
+    border-color: var(--border);
+    box-shadow: none;
+  }
+  .card.soon .chip,
+  .card.soon .watermark,
+  .card.soon .title,
+  .card.soon .desc {
+    filter: grayscale(0.65);
+  }
+  /* disabled buttons don't fire :active, but be explicit — no press feedback */
+  .card.soon:active {
+    transform: none;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: none;
+  }
+  /* a tilted rubber-stamp across the card */
+  .stamp {
+    position: absolute;
+    top: 50%;
+    inset-inline-start: 50%;
+    transform: translate(-50%, -50%) rotate(-9deg);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 22px;
+    border: 3px solid color-mix(in srgb, var(--c) 55%, var(--dim));
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--bg0) 62%, transparent);
+    color: var(--text);
+    font-size: 19px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
   }
 
   /* ---- keyframes -------------------------------------------------------- */

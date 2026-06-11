@@ -370,13 +370,13 @@ Principles:
 - **Rounded, soft, tactile.** Large touch targets, gentle motion, no clutter.
 - **Type:** one friendly geometric sans; large weights; high contrast.
 
-Two candidate **directions** (mockups produced for reaction — see `docs/mockups/`):
+Two candidate **directions** were explored:
 - **L — „Klar & Freundlich" (light):** airy off-white, soft shadows, vivid friendly
   accents. Reads great in bright daylight rooms; approachable.
 - **D — „Cool & Modern" (dark):** deep navy, glowing green target, glassy cards. Sleeker,
   more "tech/game"; makes the gauge glow. (Matches the current dev scaffold.)
 
-> **Chosen: D — „Cool & Modern" (dark).** Mockup: `docs/mockups/play-dark.html`.
+> **Chosen: D — „Cool & Modern" (dark).**
 > Palette: bg `#0b1020`/`#161f3d`, green `#38e0a0`, water `#4cc9f0→#7c5cff`,
 > grapefruit/amber `#ffb703`, toxic `#ff6b7a`.
 

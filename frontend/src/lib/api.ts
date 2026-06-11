@@ -60,16 +60,22 @@ export interface SystemHealth {
 /** The re-home plan: derived (or overridden) empty/prime durations. */
 export interface PreparePlan {
   empty_s: number
-  empty_src: 'derived' | 'override' | 'fallback'
+  empty_src: 'derived' | 'from_level' | 'fallback'
+  water_ml: number // torso water to remove (capacity for a full re-zero, else the known level)
+  overpump_ml: number // absolute safety margin pumped past empty
+  empty_ml: number // = water_ml + dead_space_ml + overpump_ml
+  from_level: number // level assumed full when draining (capacity = full re-zero)
   prime_ml: number
   prime_s: number
   prime_src: 'derived' | 'override'
+  prime_duty: number // duty 0..1 the prime-to-baseline runs at (gentle, no splash)
   tube_prime_s: number
   dead_space_ml: number
   baseline: number
   volume_ml: number
   rate_in: number
   rate_out: number
+  eta_s: number // empty_s + prime_s — the countdown total for the prepare screen
   backend: string
 }
 
@@ -77,8 +83,9 @@ export const api = {
   /** Tell the torso to move toward `level` (0–100), optionally at a custom rate. */
   setTarget: (level: number, rate?: number) => post('/api/level/target', { level, rate }),
   reset: () => post('/api/level/reset'),
-  /** Re-home: overpump empty → prime to baseline → snap the twin (mock: settle at baseline). */
-  prepare: () => post('/api/level/prepare'),
+  /** Between-runs re-home: drains only the known end-of-run volume when homed (fast),
+   *  primes to baseline, snaps the twin. Returns the plan (incl. eta_s for the countdown). */
+  prepare: () => post('/api/level/prepare') as Promise<PreparePlan>,
 
   /** Direct pump control for the admin/calibration screen. speed is 0..1. */
   admin: {
@@ -97,8 +104,9 @@ export const api = {
     },
     saveCalibration: (c: unknown) => post('/api/admin/calibration', c),
     empty: (seconds?: number) => post('/api/admin/empty', { seconds: seconds ?? null }),
-    /** Full re-home (first boot / recovery). Same routine the game runs between runs. */
-    prepare: () => post('/api/level/prepare'),
+    /** Initialize = a FULL re-home (drains a whole torso, not just the known level) —
+     *  the robust trust-reset for first boot / recovery. {full:true} forces it. */
+    prepare: () => post('/api/level/prepare', { full: true }),
     /** Prime-only init: no drain — assume the torso was hand-emptied, prime to baseline. */
     prime: () => post('/api/level/prime'),
     /** Marking workflow: overpump empty + anchor the twin at level 0 ("home"). */

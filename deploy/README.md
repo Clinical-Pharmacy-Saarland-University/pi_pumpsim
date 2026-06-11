@@ -74,7 +74,9 @@ Copied from `backend/.env.example` on install. Key fields:
 | `PUMP_BACKEND` | `mock` (no hardware) or `real` (drive the IBT-2) |
 | `PUMP_RPWM_PIN` / `PUMP_LPWM_PIN` / `PUMP_REN_PIN` / `PUMP_LEN_PIN` | IBT-2 GPIO (BCM); defaults 12 / 13 / 23 / 24 |
 | `PUMP_PWM_HZ`, `PUMP_PWM_CHIP`, `PUMP_IN_IS_RPWM` | hardware-PWM freq, sysfs chip (`auto`), swap IN/OUT |
-| `PUMP_RATE_ML_S` | full-speed (100 % duty) flow, ml/s — set during calibration |
+
+Pump **flow rate** is not an env var — it lives in the calibration (`rate_in`/`rate_out`
+in `backend/calibration.json`, written by the wizard) and is applied at boot.
 
 After editing: `sudo systemctl restart pumpsim-backend`.
 (Calibration is also live-editable from the on-screen admin panel — **triple-tap the
@@ -84,9 +86,9 @@ SafePolyMed logo** on the Start screen, or press `A`.)
 Run the **guided calibration wizard** from the admin (triple-tap the logo → „Geführte
 Kalibrierung starten"): it finds the deadband and the duty→flow curve (you weigh the water,
 1 g ≈ 1 ml) and saves to **`backend/calibration.json`** (per-machine, gitignored, loaded on
-boot). The committed **`backend/calibration.default.json`** is the fallback baseline — to make
-your numbers the default for every machine, `cp calibration.json calibration.default.json` and
-commit. The admin's **Entleeren / Reset** panel sets the home-then-dose params
+boot). The committed baseline lives in **`backend/app/game/calibration.py`** (the `DEFAULT` dict) —
+to make your numbers the default for every machine, paste your `calibration.json` values into
+`DEFAULT` and commit. The admin's **Entleeren / Reset** panel sets the home-then-dose params
 (`empty_overpump_s`, `prime_in_ml`). Full protocol: [`../docs/calibration.md`](../docs/calibration.md).
 
 ## ⚠️ Pump wiring — IBT-2 (BTS7960) H-bridge (don't skip)

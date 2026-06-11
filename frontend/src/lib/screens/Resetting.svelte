@@ -2,6 +2,25 @@
   import { t } from '../locale.svelte'
   import { game } from '../game.svelte'
   import Backdrop from '../Backdrop.svelte'
+
+  // Real-hardware reset takes a while (drain → prime), so count down from the backend's
+  // estimated total (empty + prime). On the mock pump it settles instantly, so we show
+  // no countdown — the $effect only arms on the real backend with a meaningful ETA.
+  let remaining = $state<number | null>(null)
+  $effect(() => {
+    const eta = game.prepareEtaS
+    if (game.level?.backend !== 'real' || eta < 1.5) {
+      remaining = null
+      return
+    }
+    const start = performance.now()
+    remaining = eta
+    const id = setInterval(() => {
+      const left = eta - (performance.now() - start) / 1000
+      remaining = left > 0 ? left : 0
+    }, 250)
+    return () => clearInterval(id)
+  })
 </script>
 
 <div class="reset">
@@ -11,6 +30,9 @@
       <div class="spinner"></div>
       <h1>{t('reset.title')}</h1>
       <p>{t('reset.sub')}</p>
+      {#if remaining !== null}
+        <p class="eta">{t('reset.eta', { s: Math.ceil(remaining) })}</p>
+      {/if}
     </main>
   </div>
 </div>
@@ -57,6 +79,11 @@
   p {
     font-size: 18px;
     color: var(--dim);
+  }
+  .eta {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--spm-cyan-bright);
   }
   @keyframes spin {
     to {

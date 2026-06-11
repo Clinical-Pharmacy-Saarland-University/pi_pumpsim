@@ -257,6 +257,24 @@ def test_sim_prepare_lands_exactly_on_baseline():
     assert r.homed is True
 
 
+def test_sim_prime_at_gentle_duty_still_lands_on_baseline():
+    # prime at 40 % duty (gentle, no splash): the flow is slower, so the run is LONGER —
+    # sized to that flow, the sim still fills exactly to baseline
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="mock", calibration=DBCAL)
+    r.simulate_start(80.0)
+    baseline = r.ctrl.cfg.baseline
+    duty = 0.4
+    flow_ml_s = r.flow_ml_s("in", duty)  # the (slower) 40 %-duty fill flow
+    assert 0 < flow_ml_s < DBCAL["rate_in"]  # genuinely slower than full duty
+    prime_ml = baseline / 100.0 * DBCAL["torso_volume_ml"] + DBCAL["dead_space_ml"]
+    prime_s = prime_ml / flow_ml_s
+    r.prepare(empty_s=200.0, prime_s=prime_s, prime_duty=duty)
+    for _ in range(3000):
+        r._tick()
+    assert abs(r.sim_level - baseline) < 0.3
+    assert r.homed is True
+
+
 # --- prime-only init (no-drain, for a hand-emptied torso) ------------------------
 def test_prime_only_anchors_baseline_without_draining():
     # mock shortcut: declare baseline + homed, and NEVER queue an OUT (drain) step
@@ -279,6 +297,63 @@ def test_prime_only_on_real_pumps_in_only_then_anchors_baseline():
     assert r.homed is False                   # in transit
     r._advance_seq()                          # finish -> anchor at baseline
     assert r.homed is True and r.ctrl.level == r.ctrl.cfg.baseline
+
+
+# --- non-linear flow: the runner interpolates the measured duty->flow samples -----
+# deliberately NON-linear (concave): half duty delivers only a quarter of full flow,
+# so interpolation gives a different answer than a naive rate*duty line
+SAMPLECAL = {
+    "rate_in": 40.0, "rate_out": 40.0, "torso_volume_ml": 2000.0,
+    "deadband_in": 0.0, "deadband_out": 0.0,
+    "samples": [
+        {"dir": "in", "duty": 1.0, "ml_per_s": 40.0},
+        {"dir": "in", "duty": 0.5, "ml_per_s": 10.0},
+        {"dir": "out", "duty": 1.0, "ml_per_s": 40.0},
+        {"dir": "out", "duty": 0.5, "ml_per_s": 10.0},
+    ],
+}
+
+
+def test_flow_units_interpolates_samples_not_linear():
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="mock", calibration=SAMPLECAL)
+    # duty 0.5 -> measured 10 ml/s / 2000 ml = 0.5 u/s (a linear model would say 1.0)
+    assert abs(r._flow_units("in", 0.5) - 0.5) < 1e-9
+    # duty 0.75 interpolates (0.5,10)->(1.0,40): 25 ml/s -> 1.25 u/s
+    assert abs(r._flow_units("in", 0.75) - 1.25) < 1e-9
+    # full duty lands on the calibrated rate (40 ml/s / 2000 ml = 2.0 u/s)
+    assert abs(r._flow_units("in", 1.0) - 2.0) < 1e-9
+
+
+def test_duty_for_flow_inverts_the_sample_curve():
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="mock", calibration=SAMPLECAL)
+    # to deliver 0.5 u/s (10 ml/s) the non-linear pump needs duty 0.5, not 0.25
+    assert abs(r._duty_for_flow("in", 0.5) - 0.5) < 1e-9
+    # 1.25 u/s (25 ml/s) is halfway between the 0.5 and 1.0 samples -> duty 0.75
+    assert abs(r._duty_for_flow("in", 1.25) - 0.75) < 1e-9
+    # asking for more than full-duty flow clamps at duty 1.0
+    assert abs(r._duty_for_flow("in", 5.0) - 1.0) < 1e-9
+
+
+def test_auto_follow_uses_interpolated_duty_for_drift():
+    # a slow 0.5 u/s drift needs duty 0.5 on this non-linear curve (a linear model would
+    # pick 0.25). The twin still paces at exactly the desired rate.
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="mock", calibration=SAMPLECAL)
+    start = r.ctrl.level
+    r.set_target(start + 40.0, rate=0.5)
+    r._tick()
+    assert abs(r.ctrl.level - (start + 0.025)) < 1e-9  # 0.5 u/s * 0.05 s
+    assert abs(r.pump.speed - 0.5) < 1e-9              # interpolated duty, not 0.25
+
+
+def test_sim_step_uses_interpolated_flow():
+    # the dev physics sim drains at the MEASURED flow for the duty, not a linear guess
+    r = LevelRunner(MockPump(rate_ml_s=2.0), tick_hz=20, backend="mock", calibration=SAMPLECAL)
+    r.sim_active = True
+    r.sim_level = 50.0
+    r.sim_time_scale = 1.0
+    r.manual_drive("out", 0.5)  # 0.5 duty -> 10 ml/s -> 0.5 u/s
+    r._tick()
+    assert abs(r.sim_level - (50.0 - 0.025)) < 1e-9  # 0.5 u/s * 0.05 s
 
 
 def test_sim_prime_only_fills_empty_torso_to_baseline():

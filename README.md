@@ -72,6 +72,20 @@ admin: hold-to-pump **IN/OUT**, speed, timed runs, live telemetry, **Entleeren/�
 Kalibrierter Reset**, and a **guided calibration wizard** (deadband + flow curve, saved to
 `backend/calibration.json`). Protocol: [`docs/calibration.md`](docs/calibration.md).
 
+## Configuration & tunable values
+Where the knobs live (so you don't have to grep for magic numbers):
+
+| What | Where | Notes |
+|---|---|---|
+| **Pump / torso physical** — flow rates, deadbands, `torso_volume_ml`, `dead_space_ml`, **`overpump_ml`** (absolute ml overpumped past empty on init/reset, default **100**), **`prime_duty`** (gentle, no-splash prime-to-baseline duty 0–1, default **0.4**), duty→flow `samples` | [`backend/app/game/calibration.py`](backend/app/game/calibration.py) → `DEFAULT` | Per-machine override: `backend/calibration.json` (gitignored, written by the admin wizard). Loaded on boot. |
+| **Level model** — `baseline`, `band_low/high`, `critical_low/high`, `capacity` | [`backend/app/game/controller.py`](backend/app/game/controller.py) → `LevelConfig` | **Must match** the frontend mirror `LEVELS` in [`frontend/src/lib/flow.ts`](frontend/src/lib/flow.ts) — these are the *taped* band/lines on the torso. |
+| **Deployment / hardware wiring** — `PUMP_BACKEND`, IBT-2 pins, `tick_hz`, pump rate | `backend/.env` (copy `.env.example`) → [`backend/app/config.py`](backend/app/config.py) | Pydantic Settings. `PUMP_BACKEND=mock\|real`. |
+
+**Init / reset overpump** is *absolute*, not a ratio: the torso is drained by
+`water + dead_space_ml + overpump_ml`, where `water` = the whole torso for **Initialize / Home**
+(level untrusted) or the **tracked end-of-run level** for a between-runs reset (fast). Raise
+`overpump_ml` if a reset ever stops short of empty; lower it if it wastes time pulling air.
+
 ## Hardware
 - Raspberry Pi **4 or 5**; official **Touch Display 2** (720×1280, used **landscape**
   1280×720 — rotated by `sway`).

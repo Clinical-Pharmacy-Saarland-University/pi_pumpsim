@@ -15,6 +15,31 @@ from .calibration import DEFAULT as CAL_DEFAULT
 from .controller import LevelController
 
 
+def _interp_y(curve: list[tuple[float, float]], x: float) -> float:
+    """y at x on a sorted (x, y) polyline, clamped to the endpoints."""
+    if x <= curve[0][0]:
+        return curve[0][1]
+    if x >= curve[-1][0]:
+        return curve[-1][1]
+    for (x0, y0), (x1, y1) in zip(curve, curve[1:]):
+        if x0 <= x <= x1:
+            return y0 if x1 == x0 else y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return curve[-1][1]
+
+
+def _interp_x(curve: list[tuple[float, float]], y: float) -> float:
+    """x at y on a sorted (x, y) polyline whose y is non-decreasing, clamped. Inverts
+    the flow curve: given a desired flow, find the duty that delivers it."""
+    if y <= curve[0][1]:
+        return curve[0][0]
+    if y >= curve[-1][1]:
+        return curve[-1][0]
+    for (x0, y0), (x1, y1) in zip(curve, curve[1:]):
+        if y0 <= y <= y1:
+            return x0 if y1 == y0 else x0 + (x1 - x0) * (y - y0) / (y1 - y0)
+    return curve[-1][0]
+
+
 class LevelRunner:
     def __init__(
         self,
@@ -37,6 +62,11 @@ class LevelRunner:
         self.deadband_in: float = 0.0            # duty below which the IN rotor won't turn
         self.deadband_out: float = 0.0           # duty below which the OUT rotor won't turn
         self.dead_space_ml: float = 0.0          # tubing dead-volume (prime/residual)
+        # measured duty -> flow curves (ml/s), per direction, from the calibration
+        # samples. Used to interpolate the real (possibly non-linear) pump response;
+        # empty -> fall back to the linear deadband+full-rate model.
+        self._samples_in: list[tuple[float, float]] = []
+        self._samples_out: list[tuple[float, float]] = []
         self._manual_remaining: float | None = None  # seconds left on the current step
         self._seq: list[dict] = []  # queued timed steps (empty / prepare / mark goto)
         self._sync_level_after: float | None = None  # snap twin to this level when the seq ends
@@ -189,34 +219,35 @@ class LevelRunner:
         self.manual = False
         self.homed = True
 
-    def prepare(self, empty_s: float, prime_s: float) -> None:
-        """Re-home to a known start. On REAL hardware: overpump empty, prime to
-        baseline, then snap the twin to baseline. On mock the twin IS ground truth
-        (no real water, no drift), so just settle it at baseline — keeps dev fast.
-        When the DEV sim is on, mock runs the REAL sequence so the sim drains/fills."""
+    def prepare(self, empty_s: float, prime_s: float, prime_duty: float = 1.0) -> None:
+        """Re-home to a known start. On REAL hardware: overpump empty, then prime to
+        baseline at `prime_duty` (a gentle duty so the inflow doesn't splash — the
+        caller sizes prime_s to the flow at that duty), then snap the twin to baseline.
+        On mock the twin IS ground truth (no real water, no drift), so just settle it at
+        baseline — keeps dev fast. With the DEV sim on, mock runs the REAL sequence."""
         if self.backend != "real" and not self.sim_active:
             self.set_target(self.ctrl.cfg.baseline)
             self.homed = True
             return
         steps: list[dict] = [{"dir": "out", "speed": 1.0, "seconds": empty_s}]
         if prime_s > 0:
-            steps.append({"dir": "in", "speed": 1.0, "seconds": prime_s})
+            steps.append({"dir": "in", "speed": prime_duty, "seconds": prime_s})
         self.run_sequence(steps, sync_level=self.ctrl.cfg.baseline)
 
-    def prime_to_baseline(self, prime_s: float) -> None:
+    def prime_to_baseline(self, prime_s: float, prime_duty: float = 1.0) -> None:
         """Prime-only init for a torso that's ALREADY empty (drained by hand): pump
-        IN to baseline and anchor the twin — the no-overpump variant of prepare().
-        Use when the operator has emptied the torso themselves. Mock shortcut: settle
-        at baseline + homed; real/sim: pump IN only (prime_s covers tube + baseline),
-        then snap. An assumption, not a measurement — if the torso wasn't empty it
-        overfills, so this is operator-asserted just like home/prepare are."""
+        IN to baseline at `prime_duty` (gentle, no-splash) and anchor the twin — the
+        no-overpump variant of prepare(). Use when the operator has emptied the torso
+        themselves. Mock shortcut: settle at baseline + homed; real/sim: pump IN only
+        (prime_s covers tube + baseline), then snap. An assumption, not a measurement —
+        if the torso wasn't empty it overfills, so this is operator-asserted."""
         if self.backend != "real" and not self.sim_active:
             self.set_target(self.ctrl.cfg.baseline)
             self.homed = True
             return
         steps: list[dict] = []
         if prime_s > 0:
-            steps.append({"dir": "in", "speed": 1.0, "seconds": prime_s})
+            steps.append({"dir": "in", "speed": prime_duty, "seconds": prime_s})
         self.run_sequence(steps, sync_level=self.ctrl.cfg.baseline)
 
     def home_empty(self, empty_s: float, tube_prime_s: float = 0.0) -> None:
@@ -282,12 +313,36 @@ class LevelRunner:
         self.deadband_out = float(cal.get("deadband_out") or 0.0)
         self.dead_space_ml = float(cal.get("dead_space_ml") or 0.0)
         self.volume_ml = float(cal.get("torso_volume_ml") or CAL_DEFAULT["torso_volume_ml"])
+        self._samples_in = self._parse_samples(cal.get("samples"), "in")
+        self._samples_out = self._parse_samples(cal.get("samples"), "out")
         if self.rate_in_ml_s:
             self.pump.set_rate(self.rate_in_ml_s)
+
+    @staticmethod
+    def _parse_samples(raw: object, direction: str) -> list[tuple[float, float]]:
+        """Extract a sorted (duty, ml/s) flow curve for one direction from the
+        calibration samples. Tolerant: skips malformed / out-of-range points."""
+        pts: list[tuple[float, float]] = []
+        for s in raw if isinstance(raw, list) else []:
+            if not isinstance(s, dict) or s.get("dir") != direction:
+                continue
+            try:
+                duty, ml_s = float(s["duty"]), float(s["ml_per_s"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if 0.0 <= duty <= 1.0 and ml_s >= 0.0:
+                pts.append((duty, ml_s))
+        pts.sort()
+        return pts
 
     def _dir_rate_ml_s(self, direction: str) -> float | None:
         """Calibrated full-duty flow for a direction (drain is often slower)."""
         return self.rate_out_ml_s if direction == "out" else self.rate_in_ml_s
+
+    def flow_ml_s(self, direction: str, duty: float) -> float:
+        """Calibrated flow (ml/s) at a given duty — sample-interpolated. Used to size a
+        timed run at a non-full duty, e.g. the gentle no-splash prime to baseline."""
+        return self._flow_units(direction, duty) * self.volume_ml / 100.0
 
     def _rate_units(self, direction: str) -> float | None:
         """Calibrated full-duty rate as level-units/s (ml/s mapped over the torso)."""
@@ -299,17 +354,50 @@ class LevelRunner:
     def _deadband(self, direction: str) -> float:
         return self.deadband_out if direction == "out" else self.deadband_in
 
+    def _flow_curve(self, direction: str) -> list[tuple[float, float]] | None:
+        """The measured duty -> flow curve as sorted (duty, level-units/s) points,
+        anchored at (deadband, 0). None when no samples sit above the deadband — the
+        caller then falls back to the linear (deadband + full-rate) model."""
+        if self.volume_ml <= 0:
+            return None
+        db = self._deadband(direction)
+        pts = self._samples_out if direction == "out" else self._samples_in
+        above = [(d, ml / self.volume_ml * 100.0) for (d, ml) in pts if d > db]
+        if not above:
+            return None
+        return sorted([(db, 0.0)] + above)
+
     def _flow_units(self, direction: str, duty: float) -> float:
-        """Actual flow (level-units/s) at a given duty: zero below the deadband, then
-        ramping linearly to the calibrated full-duty rate at duty 1.0."""
+        """Actual flow (level-units/s) at a given duty. Below the deadband: zero. Above:
+        piecewise-linear interpolation of the measured calibration samples; with no
+        samples, a linear ramp from the deadband to the calibrated full-duty rate."""
+        db = self._deadband(direction)
+        if duty <= db:
+            return 0.0
+        curve = self._flow_curve(direction)
+        if curve is not None:
+            return _interp_y(curve, duty)
         r = self._rate_units(direction)
         if not r:
             return 0.0
-        db = self._deadband(direction)
         span = 1.0 - db
-        if duty <= db or span <= 0:
+        return r * (duty - db) / span if span > 0 else 0.0
+
+    def _duty_for_flow(self, direction: str, flow_u: float) -> float:
+        """Inverse of _flow_units: the pump duty (0..1) that delivers `flow_u`
+        level-units/s. Interpolates the measured sample curve when present (so the duty
+        commanded to the hardware reflects its real, possibly non-linear response), else
+        the linear deadband model. Clamped to [0, 1]."""
+        if flow_u <= 0.0:
             return 0.0
-        return r * (duty - db) / span
+        curve = self._flow_curve(direction)
+        if curve is not None:
+            return _interp_x(curve, flow_u)
+        db = self._deadband(direction)
+        r = self._rate_units(direction)
+        if not r:
+            return 0.0
+        return min(1.0, db + (1.0 - db) * (flow_u / r))
 
     # --- loop -------------------------------------------------------------
     def _substeps(self) -> int:
@@ -366,15 +454,13 @@ class LevelRunner:
             return
         full_step = pump_rate_u * dt              # units the pump moves at full duty
         want_step = min(c.rate * dt, abs(diff))   # game-paced desire, capped at remaining
-        frac = max(0.0, min(1.0, want_step / full_step)) if full_step > 0 else 0.0
-        db = self._deadband(direction)
-        # map the desired flow fraction onto a duty ABOVE the deadband (the rotor
-        # doesn't turn below it); delivered volume is that fraction of full-duty flow
-        duty = db + (1.0 - db) * frac if frac > 0.0 else 0.0
-        delivered = min(full_step * frac, abs(diff))  # never overshoot the target
+        delivered = min(want_step, full_step, abs(diff))  # can't outrun the pump or overshoot
         c.level = max(0.0, min(c.cfg.capacity, c.level + (delivered if direction == "in" else -delivered)))
         moving = delivered > 1e-9
-        self.pump.drive(direction if moving else "stop", duty if moving else 0.0)
+        # command the duty the calibrated flow model says delivers this rate — from the
+        # interpolated sample curve when present, else the linear deadband model
+        duty = self._duty_for_flow(direction, delivered / dt) if (moving and dt > 0) else 0.0
+        self.pump.drive(direction if moving else "stop", duty)
 
     async def _loop(self) -> None:
         while True:

@@ -28,7 +28,7 @@ def test_set_rate_updates_flow():
 
 
 def test_factory_defaults_to_mock():
-    p = create_pump(Settings(pump_backend="mock", pump_rate_ml_s=2.0))
+    p = create_pump(Settings(pump_backend="mock"))
     assert isinstance(p, MockPump)
 
 

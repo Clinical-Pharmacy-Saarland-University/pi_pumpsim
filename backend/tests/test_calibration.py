@@ -21,12 +21,14 @@ def test_missing_file_returns_defaults(tmp_path):
     loaded = load_calibration(tmp_path / "nope.json")
     assert loaded == DEFAULT
     # sensible physical assumptions even with no calibration at all
-    assert loaded["rate_in"] == 40.0
+    assert loaded["rate_in"] == 41.9
     assert loaded["torso_volume_ml"] == 1800.0
+    assert loaded["overpump_ml"] == 100.0  # absolute init/reset overpump margin
+    assert loaded["prime_duty"] == 0.4     # gentle, no-splash prime-to-baseline duty
     # returned object is a copy — mutating it must not corrupt the module default
     loaded["rate_in"] = 5.0
     loaded["samples"].append({"x": 1})
-    assert DEFAULT["rate_in"] == 40.0
+    assert DEFAULT["rate_in"] == 41.9
     assert {"x": 1} not in DEFAULT["samples"]
 
 
@@ -35,9 +37,9 @@ def test_partial_file_filled_with_defaults(tmp_path):
     p.write_text('{"rate_in": 7.0}', encoding="utf-8")
     loaded = load_calibration(p)
     assert loaded["rate_in"] == 7.0
-    assert loaded["deadband_in"] == 0.15  # missing keys filled from the default calibration
+    assert loaded["deadband_in"] == 0.16  # missing keys filled from the default calibration
     assert loaded["torso_volume_ml"] == 1800.0  # older files gain the new field
-    assert len(loaded["samples"]) == 6
+    assert len(loaded["samples"]) == 8
 
 
 def test_torso_volume_round_trip(tmp_path):
@@ -63,8 +65,10 @@ def test_save_ignores_extra_keys(tmp_path):
 
 def test_reset_params_round_trip(tmp_path):
     p = tmp_path / "c.json"
-    save_calibration({"empty_overpump_s": 90, "prime_in_ml": 50}, p)
+    save_calibration({"empty_overpump_s": 90, "prime_in_ml": 50, "overpump_ml": 150, "prime_duty": 0.5}, p)
     loaded = load_calibration(p)
     assert loaded["empty_overpump_s"] == 90
     assert loaded["prime_in_ml"] == 50
-    assert loaded["deadband_in"] == 0.15  # other keys take the default calibration
+    assert loaded["overpump_ml"] == 150  # the absolute overpump margin persists
+    assert loaded["prime_duty"] == 0.5   # the gentle prime duty persists
+    assert loaded["deadband_in"] == 0.16  # other keys take the default calibration

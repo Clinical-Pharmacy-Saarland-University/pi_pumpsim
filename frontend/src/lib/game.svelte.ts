@@ -19,6 +19,9 @@ export const game = $state({
   ageGroup: 'young' as AgeGroup,
   story: null as Story | null,
   patient: STORIES[0].patient as Patient,
+  // estimated total seconds for the current between-runs reset (empty + prime), from
+  // the backend plan — the "Patient wird vorbereitet" screen counts down from it. 0 = unknown.
+  prepareEtaS: 0,
 })
 
 // two independent settle-waiters: `wait` for the between-runs re-home (prepare),
@@ -123,7 +126,8 @@ let preHomeIssued = false
 export function preHome(): void {
   if (preHomeIssued) return
   preHomeIssued = true
-  api.prepare()
+  game.prepareEtaS = 0
+  api.prepare().then((p) => (game.prepareEtaS = p.empty_s + p.prime_s)).catch(() => {})
 }
 
 function prepareThen(next: () => void): void {
@@ -135,7 +139,12 @@ function prepareThen(next: () => void): void {
     return
   }
   game.phase = 'resetting'
-  if (!preHomeIssued) api.prepare() // an in-flight pre-home: wait on it, don't restart
+  if (!preHomeIssued) {
+    // fresh reset → issue it and capture the ETA for the countdown. (An in-flight
+    // pre-home already set prepareEtaS; ride it out without restarting.)
+    game.prepareEtaS = 0
+    api.prepare().then((p) => (game.prepareEtaS = p.empty_s + p.prime_s)).catch(() => {})
+  }
   preHomeIssued = false
   const w = { next, armed: false }
   wait = w
