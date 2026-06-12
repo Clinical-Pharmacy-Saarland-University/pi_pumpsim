@@ -1,11 +1,12 @@
 <script lang="ts">
-  // Self-contained v2 story „Der Wochen-Pillenplan" (Adhärenz · Lamotrigin).
-  // Blueprint screen on <PlayShell/> + the .pl-* kit. Signature mechanic: COMPOSE-A-WEEK then
-  // HAND-CRANK — the player authors a 7-slot Mo–So plan (0/1/2 pills) with zero time pressure,
-  // then turns each day by hand; the plan becomes a saw-tooth carved into the real torso AND a
-  // drawn PK concentration–time curve. The pump is the instrument; the curve is the authored
-  // shape made legible. A forced twist demo shows a "catch-up" double climbing the WRONG way.
-  // Losses rebuilt via a manual $effect (auto-trip is engine-gated to PLAY_PHASES, not play2).
+  // Self-contained v2 story „Die Antibiotika-Kur" (Adhärenz · Antibiotikum/Resistenz).
+  // REWORK 2026-06-12 — a GUIDED TEACHING ARC. Every beat motivates the next move and pairs the
+  // real pump (driveTo) with two on-screen aids that mirror the body: a REAL one-compartment oral
+  // PK curve (smooth absorb/eliminate saw-tooth, band + kill line + toxic line) and a bacteria
+  // petri that thins out, survives, blooms RESISTANT, or clears.
+  // Arc: briefing → accumulate to steady state → Q1 → skipped dose → Q2 → „nachholen" double
+  // (overshoot, then the correct fix) → stop-early RESISTANCE bloom → Q3 → finish the course → win.
+  // It always reaches the cure (a teaching win); the stars grade the three questions.
   import { onMount } from 'svelte'
   import { t } from '../locale.svelte'
   import { game, driveTo, backToStories } from '../game.svelte'
@@ -13,167 +14,241 @@
   import WatchBody from '../WatchBody.svelte'
   import EndScreen from '../EndScreen.svelte'
   import {
-    ADH_DAYS, ADH_FACTS, ADH_DECISION, simulateWeek, isCleanPlan,
-    levelToY, dayToX, ADH_PLOT_TOP, ADH_PLOT_BOT, ADH_PLOT_LEFT, ADH_PLOT_RIGHT,
-    ADH_CURVE_W, ADH_CURVE_H, type AdhDecisionOpt,
+    ADH_EMPTY, ADH_KILL_LINE, ADH_STEADY, ADH_SKIP_LOW, ADH_DOUBLE_HIGH,
+    ADH_TRACK_ACCUM, ADH_TRACK_STOP,
+    PK_DOSE_FULL, PK_DOSE_SKIP, PK_DOSE_DOUBLE, PK_DOSE_STOP,
+    pkTrace, pkPolyline, pkX, pkY, PK_MIC, PK_TOX, ADH_PLOT,
+    ADH_BUGS, ADH_RESISTANT, bugsAliveAt,
+    ADH_Q1, ADH_Q2, ADH_Q3, adhOptionsFor, adhCleverGrade, adhProGrade,
+    type AdhQOpt,
   } from '../stories/adherence'
-  import { LEVELS, stars, type Outcome } from '../flow'
+  import { stars } from '../flow'
 
-  type Beat = 'setup' | 'filling' | 'build' | 'play' | 'twistDouble' | 'decide' | 'won' | 'outcome'
-  let beat = $state<Beat>('setup')
-  let outcome = $state<Outcome>('win')
+  type Beat = 'briefing' | 'accumulate' | 'q1' | 'skip' | 'q2' | 'double' | 'resistance' | 'q3' | 'cure' | 'won' | 'outcome'
+  let beat = $state<Beat>('briefing')
   let pumping = $state(false)
-  let resolved = $state(false)
 
-  // dose-fill rotation
-  let factIdx = $state(0)
-  let fillDone = $state(false)
-  let factShownAt = 0
-  const FACT_MS = 4500
-  const FACT_MIN_MS = 3800
+  // ── the PK curve: a scenario dose-vector, a plotted [t0,t1] day-window, and how far it is drawn ──
+  let pkDoses = $state<number[]>(PK_DOSE_FULL)
+  let pkWin = $state<[number, number]>([0, 3])
+  let pkReveal = $state(0)
+  let pkTraceArr = $derived(pkTrace(pkDoses))
+  let pkPts = $derived(pkPolyline(pkTraceArr, pkWin[0], pkWin[1], pkReveal))
+  let pkDot = $derived.by(() => {
+    const r = Math.min(pkWin[1], pkReveal)
+    const pts = pkTraceArr.filter((s) => s.t >= pkWin[0] - 1e-9 && s.t <= r + 1e-9)
+    return pts.length ? pts[pts.length - 1] : null
+  })
+  let pkTimer: ReturnType<typeof setInterval> | undefined
+  function animatePk(to: number, ms = 1100, onDone: () => void = () => {}) {
+    clearInterval(pkTimer)
+    const from = pkReveal
+    const start = performance.now()
+    pkTimer = setInterval(() => {
+      const f = Math.min(1, (performance.now() - start) / ms)
+      pkReveal = from + (to - from) * f
+      if (f >= 1) { clearInterval(pkTimer); pkReveal = to; onDone() }
+    }, 1000 / 60)
+  }
+  $effect(() => () => clearInterval(pkTimer))
 
-  // authored week
-  let plan = $state<number[]>([1, 1, 1, 1, 1, 1, 1])
-  let weekLevels = $state<number[]>([])
-  let weekTrip = $state(-1)
-  let weekOutcome = $state<Outcome>('win')
-  let drawnDays = $state(0)
-  let dayCue = $state('adh.play.watch.held')
-  let dayTone = $state<'good' | 'falling' | 'rising'>('good')
+  // curve band geometry (normalised concentration axis)
+  const yTox = pkY(PK_TOX)
+  const yMic = pkY(PK_MIC)
 
-  // twist demo + decision
-  let twistGiven = $state(false)
-  let dMsg = $state<string | null>(null)
-  let decideWrong = $state(false)
-  let decideDone = $state(false)
+  // ── the bacteria petri stage (scripted per beat; 'accum' derives the live count from the level) ──
+  type BugStage = 'full' | 'accum' | 'survivors' | 'resistant' | 'cleared'
+  let bugStage = $state<BugStage>('full')
 
-  let dOptions = $derived(ADH_DECISION.filter((o) => game.ageGroup === 'adult' || !o.adultOnly))
-  let clever = $derived(isCleanPlan(plan) ? 1 : 0.5)
-  let pro = $derived(decideDone ? (decideWrong ? 0.5 : 1) : 0)
-  let starCount = $derived(stars(outcome === 'win', clever, pro))
-  let drawnPoints = $derived(
-    weekLevels.slice(0, drawnDays).map((l, i) => `${dayToX(i)},${levelToY(l)}`).join(' '),
-  )
-  let bandTop = levelToY(LEVELS.bandHigh)
-  let bandBot = levelToY(LEVELS.bandLow)
+  let accumStep = $state(0) // 0 = at the empty start, 1..3 = doses given
+  let skipStarted = $state(false)
+  let doubleGiven = $state(false)
+  let doubleHealed = $state(false)
+  let resistStarted = $state(false)
+  let resistDone = $state(false)
+  let cureStarted = $state(false)
+  let cureDone = $state(false)
+
+  // questions (gated: must pick the correct option to proceed; wrong tap = feedback + stumble)
+  let q1Done = $state(false), q1Msg = $state<string | null>(null), q1Stumbled = $state(false)
+  let q2Done = $state(false), q2Msg = $state<string | null>(null), q2Stumbled = $state(false)
+  let q3Done = $state(false), q3Msg = $state<string | null>(null), q3Stumbled = $state(false)
+
+  let adult = $derived(game.ageGroup === 'adult')
+  let clever = $derived(adhCleverGrade(q1Stumbled))
+  let pro = $derived(adhProGrade((q2Stumbled ? 1 : 0) + (q3Stumbled ? 1 : 0)))
+  let starCount = $derived(stars(true, clever, pro))
+
   let stepNum = $derived(
-    ['setup', 'filling'].includes(beat) ? 1
-    : beat === 'build' ? 2
-    : beat === 'play' ? 3
-    : beat === 'twistDouble' ? 4
-    : beat === 'decide' ? 5
+    beat === 'briefing' ? 1
+    : beat === 'accumulate' || beat === 'q1' ? 2
+    : beat === 'skip' || beat === 'q2' ? 3
+    : beat === 'double' ? 4
+    : beat === 'resistance' || beat === 'q3' ? 5
     : 6,
   )
 
-  onMount(() => drive(LEVELS.start, 8)) // sit at the empty baseline (the reset already homed here)
+  // live accumulation caption, read off the body
+  let accumCue = $derived(
+    (game.level?.level ?? ADH_EMPTY) >= ADH_STEADY - 2 ? 'adh.accum.steady'
+    : (game.level?.level ?? ADH_EMPTY) >= ADH_KILL_LINE ? 'adh.accum.entered'
+    : 'adh.accum.below',
+  )
+
+  // petri caption (single readable line BELOW the dish — never overlapping the bugs)
+  let petriCap = $derived(
+    bugStage === 'resistant' ? { key: 'adh.petri.resistant', cls: 'warn' }
+    : bugStage === 'cleared' ? { key: 'adh.petri.cleared', cls: 'good' }
+    : { key: 'adh.petri.label', cls: '' },
+  )
+
+  // ── bacteria render model (deterministic; CSS handles fade/scale/bloom) ──
+  type RBug = { id: string; x: number; y: number; kind: 'normal' | 'tough' | 'resistant'; alive: boolean }
+  const NONTOUGH = ADH_BUGS.filter((b) => !b.tough)
+  const TOUGH = ADH_BUGS.filter((b) => b.tough)
+  let renderBugs = $derived.by<RBug[]>(() => {
+    const lvl = game.level?.level ?? ADH_EMPTY
+    if (bugStage === 'resistant') {
+      return [
+        ...ADH_BUGS.map((b) => ({ ...b, kind: (b.tough ? 'resistant' : 'normal') as RBug['kind'], alive: !!b.tough })),
+        ...ADH_RESISTANT.map((b) => ({ ...b, kind: 'resistant' as const, alive: true })),
+      ]
+    }
+    if (bugStage === 'cleared') {
+      return [
+        ...ADH_BUGS.map((b) => ({ ...b, kind: 'normal' as const, alive: false })),
+        ...ADH_RESISTANT.map((b) => ({ ...b, kind: 'resistant' as const, alive: false })),
+      ]
+    }
+    if (bugStage === 'survivors') {
+      return ADH_BUGS.map((b) => ({ ...b, kind: (b.tough ? 'tough' : 'normal') as RBug['kind'], alive: !!b.tough }))
+    }
+    if (bugStage === 'accum') {
+      const nonToughAlive = Math.max(0, bugsAliveAt(lvl) - TOUGH.length)
+      return [
+        ...NONTOUGH.map((b, i) => ({ ...b, kind: 'normal' as const, alive: i < nonToughAlive })),
+        ...TOUGH.map((b) => ({ ...b, kind: 'tough' as const, alive: true })),
+      ]
+    }
+    return ADH_BUGS.map((b) => ({ ...b, kind: (b.tough ? 'tough' : 'normal') as RBug['kind'], alive: true }))
+  })
+
+  onMount(() => drive(ADH_EMPTY, 8)) // sit at the untreated baseline (the reset already homed here)
 
   function drive(target: number, rate: number, then: () => void = () => {}) {
     pumping = true
     driveTo(target, rate, () => { pumping = false; then() })
   }
 
-  // rotate dose-fill facts during the prime (20→62)
-  $effect(() => {
-    if (beat !== 'filling') return
-    factIdx = 0
-    factShownAt = performance.now()
-    const id = setInterval(() => {
-      if (fillDone) return
-      factIdx = (factIdx + 1) % ADH_FACTS.length
-      factShownAt = performance.now()
-    }, FACT_MS)
-    return () => clearInterval(id)
-  })
-  $effect(() => {
-    if (beat !== 'filling' || !fillDone) return
-    const wait = Math.max(700, FACT_MIN_MS - (performance.now() - factShownAt))
-    const id = setTimeout(() => (beat = 'build'), wait)
-    return () => clearTimeout(id)
-  })
-
-  // manual auto-trip during the hand-cranked week (an authored bad plan crosses a tape)
-  $effect(() => {
-    if (beat !== 'play' || resolved) return
-    const lv = game.level?.level
-    if (lv === undefined) return
-    if (lv >= 80) { resolved = true; outcome = 'over'; beat = 'outcome' }
-    else if (lv <= 35) { resolved = true; outcome = 'under'; beat = 'outcome' }
-  })
-
-  function openCalendar() {
+  // ── beat transitions that set up the curve for the next scene ──
+  function enterAccumulate() {
     if (pumping) return
-    fillDone = false
-    beat = 'filling'
-    drive(LEVELS.dose, 7, () => (fillDone = true)) // 20 → 62 prime
+    beat = 'accumulate'; bugStage = 'accum'
+    pkDoses = PK_DOSE_FULL; pkWin = [0, 3]; pkReveal = 0; accumStep = 0
+  }
+  function nextDose() {
+    if (pumping || accumStep >= ADH_TRACK_ACCUM.length - 1) return
+    const next = accumStep + 1
+    animatePk(next, 850)
+    drive(ADH_TRACK_ACCUM[next], next === ADH_TRACK_ACCUM.length - 1 ? 4 : 6, () => { accumStep = next; pkReveal = next })
   }
 
-  function cycle(d: number) {
-    if (pumping) return
-    const next = [...plan]
-    next[d] = (next[d] + 1) % 3
-    plan = next
+  function enterSkip() { beat = 'skip'; bugStage = 'survivors'; pkDoses = PK_DOSE_SKIP; pkWin = [3, 5]; pkReveal = 4 }
+  function playSkip() {
+    if (pumping || skipStarted) return
+    skipStarted = true
+    animatePk(5, 1300)
+    drive(ADH_SKIP_LOW, 5)
   }
 
-  function startWeek() {
-    if (pumping) return
-    const s = simulateWeek(plan)
-    weekLevels = s.levels; weekTrip = s.tripIndex; weekOutcome = s.outcome
-    drawnDays = 0
-    beat = 'play'
+  function enterDouble() { beat = 'double'; pkDoses = PK_DOSE_DOUBLE; pkWin = [3, 6]; pkReveal = 4 }
+  function giveDouble() {
+    if (pumping || doubleGiven) return
+    doubleGiven = true
+    animatePk(6, 1500)
+    drive(ADH_DOUBLE_HIGH, 4)
   }
-  function nextDay() {
-    if (pumping || drawnDays >= weekLevels.length) return
-    const d = drawnDays
-    const slot = plan[d]
-    dayCue = slot === 0 ? 'adh.play.watch.gap' : slot === 2 ? 'adh.play.watch.up' : 'adh.play.watch.held'
-    dayTone = slot === 0 ? 'falling' : slot === 2 ? 'rising' : 'good'
-    drive(weekLevels[d], slot === 1 ? 6 : 4, () => {
-      drawnDays = d + 1
-      if (resolved) return
-      if (drawnDays >= weekLevels.length && weekTrip === -1) {
-        drive(LEVELS.dose, 6, () => (beat = 'twistDouble')) // reset to full for the twist demo
-      }
-    })
+  function healDouble() {
+    if (pumping || doubleHealed) return
+    drive(ADH_STEADY, 4, () => (doubleHealed = true)) // 78 → 62: the right level sits calmly in the band
   }
 
-  function twistDrop() {
-    if (pumping || twistGiven) return
-    twistGiven = true
-    drive(78, 4) // 62 → 78 wrong-way climb from a full body — clearly over the window (no trip)
-  }
-  function twistNext() {
-    if (pumping) return
-    drive(54, 6, () => (beat = 'decide')) // drop to a gap state for the read-the-body decision
-  }
-
-  function pickDecide(o: AdhDecisionOpt) {
-    if (pumping || decideDone) return
-    dMsg = o.feedbackKey
-    if (o.result === 'win') {
-      decideDone = true
-      drive(62, 4, () => (beat = 'won')) // 54 → 62 heal
-    } else if (o.target !== undefined) {
-      decideWrong = true
-      drive(o.target, 4, () => drive(54, 6)) // wrong-way climb, then settle back for a retry
-    } else {
-      decideWrong = true // no-move stillness ("weglassen / abwarten")
+  function enterResist() { beat = 'resistance'; pkDoses = PK_DOSE_STOP; pkWin = [3, 7]; pkReveal = 4 }
+  function stopCourse() {
+    if (pumping || resistStarted) return
+    resistStarted = true
+    animatePk(7, 2000)
+    let i = 1
+    const step = () => {
+      if (i >= ADH_TRACK_STOP.length) { bugStage = 'resistant'; resistDone = true; return }
+      drive(ADH_TRACK_STOP[i], 5, () => { i++; step() })
     }
+    step()
+  }
+
+  function enterCure() { beat = 'cure'; bugStage = 'survivors'; pkDoses = PK_DOSE_FULL; pkWin = [0, 7]; pkReveal = 0 }
+  function finishCourse() {
+    if (pumping || cureStarted) return
+    cureStarted = true
+    animatePk(7, 2200, () => { bugStage = 'cleared'; cureDone = true }) // the last survivors die — none left to resist
+    drive(ADH_STEADY, 6)
+  }
+
+  function pick(opt: AdhQOpt, which: 1 | 2 | 3) {
+    if (pumping) return
+    if (which === 1) { q1Msg = opt.fbKey; if (opt.correct) q1Done = true; else q1Stumbled = true }
+    else if (which === 2) { q2Msg = opt.fbKey; if (opt.correct) q2Done = true; else q2Stumbled = true }
+    else { q3Msg = opt.fbKey; if (opt.correct) q3Done = true; else q3Stumbled = true }
   }
 </script>
 
 <div class="root">
+  <!-- local snippets (declared on the plain div, NOT inside <PlayShell>, so they are reusable
+       helpers rather than snippet props of the shell) -->
+  {#snippet petri()}
+    <div class="petricol">
+      <div class="petri" class:resistant={bugStage === 'resistant'} class:cleared={bugStage === 'cleared'}>
+        {#each renderBugs as b (b.id)}
+          <span class="bug {b.kind}" class:dead={!b.alive} style="left:{b.x}%; top:{b.y}%; --i:{b.x % 7}"></span>
+        {/each}
+      </div>
+      <span class="plabel {petriCap.cls}">{t(petriCap.key)}</span>
+    </div>
+  {/snippet}
+
+  {#snippet pkcurve()}
+    <svg class="curve" viewBox={`0 0 ${ADH_PLOT.w} ${ADH_PLOT.h}`} aria-hidden="true">
+      <!-- zones -->
+      <rect class="zhigh" x={ADH_PLOT.left} y={ADH_PLOT.top} width={ADH_PLOT.right - ADH_PLOT.left} height={yTox - ADH_PLOT.top} />
+      <rect class="cband" x={ADH_PLOT.left} y={yTox} width={ADH_PLOT.right - ADH_PLOT.left} height={yMic - yTox} />
+      <rect class="zlow" x={ADH_PLOT.left} y={yMic} width={ADH_PLOT.right - ADH_PLOT.left} height={ADH_PLOT.bot - yMic} />
+      <line class="limit" x1={ADH_PLOT.left} y1={yTox} x2={ADH_PLOT.right} y2={yTox} />
+      <line class="killline" x1={ADH_PLOT.left} y1={yMic} x2={ADH_PLOT.right} y2={yMic} />
+      <!-- zone labels -->
+      <text class="zlbl high" x={ADH_PLOT.left + 8} y={ADH_PLOT.top + 15}>{t('adh.curve.high')}</text>
+      <text class="zlbl band" x={ADH_PLOT.left + 8} y={(yTox + yMic) / 2 + 5}>{t('adh.curve.band')}</text>
+      <text class="zlbl low" x={ADH_PLOT.left + 8} y={ADH_PLOT.bot - 8}>{t('adh.curve.low')}</text>
+      <!-- axis -->
+      <line class="axis" x1={ADH_PLOT.left} y1={ADH_PLOT.bot} x2={ADH_PLOT.right} y2={ADH_PLOT.bot} />
+      <text class="axislbl" x={ADH_PLOT.right} y={ADH_PLOT.bot + 16}>Zeit →</text>
+      <!-- the drawn PK trace -->
+      {#if pkPts}
+        <polyline points={pkPts} class="cline" />
+      {/if}
+      {#if pkDot}
+        <circle cx={pkX(pkDot.t, pkWin[0], pkWin[1])} cy={pkY(pkDot.c)} r="5.5" class="cdot" />
+      {/if}
+    </svg>
+  {/snippet}
+
   {#if beat === 'outcome'}
     <EndScreen
-      {outcome}
-      titleKey={`adh.out.${outcome}.title`}
-      subKey={`adh.out.${outcome}.sub`}
+      outcome="win"
+      titleKey="adh.out.win.title"
+      subKey="adh.out.win.sub"
       storyTitleKey="story.adherence.title"
       score={starCount}
-      factKeys={outcome === 'win'
-        ? ['adh.out.dyk1', 'adh.out.dyk2']
-        : outcome === 'over'
-          ? ['adh.out.dyk.over', 'adh.out.dyk2']
-          : ['adh.out.dyk.under', 'adh.out.dyk1']}
+      factKeys={['adh.out.dyk1', 'adh.out.dyk2', 'adh.out.dyk3']}
     />
   {:else}
     <PlayShell
@@ -181,112 +256,170 @@
       kicker={t('story.adherence.title')}
       caseLine={t('adh.case')}
       step={stepNum}
-      total={7}
+      total={6}
       onCancel={backToStories}
     >
       {#key beat}
         <div class="beat">
-          {#if beat === 'setup'}
-            <div class="scene">
-              <span class="pl-emoji">⏰</span>
-              <h1 class="pl-h1">{t('adh.brief.patient')}</h1>
-              <p class="pl-lead">{t('adh.brief.goal')}</p>
-              <div class="actions">
-                <button class="pl-action" disabled={pumping} onclick={openCalendar}>{t('adh.setup.btn')}</button>
+          {#if beat === 'briefing'}
+            <div class="brief">
+              <div class="heroes"><span>🧑</span><span class="vs">vs</span><span class="bugs">🦠</span></div>
+              <p class="intro">{t('adh.brief.patient')}</p>
+              <p class="goal">{t('adh.brief.goal')}</p>
+              <div class="legend">
+                <span class="lgtitle">{t('adh.brief.legend')}</span>
+                <span class="lgrow high"><i></i>{t('adh.legend.high')}</span>
+                <span class="lgrow band"><i></i>{t('adh.legend.band')}</span>
+                <span class="lgrow low"><i></i>{t('adh.legend.low')}</span>
               </div>
+              <button class="pl-action" disabled={pumping} onclick={enterAccumulate}>{t('adh.brief.btn')}</button>
             </div>
 
-          {:else if beat === 'filling'}
-            <div class="scene wide">
-              <WatchBody text={t(fillDone ? 'adh.setup.filled' : 'adh.setup.cue')} tone="good" />
-              {#key factIdx}
-                <div class="factcard pl-card">
-                  <span class="factkick">{t('adh.fact.kicker')}</span>
-                  <p>{t(ADH_FACTS[factIdx])}</p>
-                </div>
-              {/key}
-            </div>
-
-          {:else if beat === 'build'}
+          {:else if beat === 'accumulate'}
             <div class="task">
-              <h2 class="pl-h2 center">{t('adh.build.prompt')}</h2>
-              <div class="week">
-                {#each plan as slot, d}
-                  <button class="slot s{slot}" disabled={pumping} onclick={() => cycle(d)}>
-                    <span class="dayname">{ADH_DAYS[d]}</span>
-                    <span class="pills">{slot === 0 ? '—' : slot === 1 ? '💊' : '💊💊'}</span>
-                    <small>{t(slot === 0 ? 'adh.slot.empty' : slot === 1 ? 'adh.slot.one' : 'adh.slot.double')}</small>
-                  </button>
-                {/each}
-              </div>
-              <p class="pl-body hint">{t('adh.build.hint')}</p>
+              <p class="lead-c">{t('adh.accum.prompt')}</p>
+              <div class="stage">{@render petri()}{@render pkcurve()}</div>
+              {#if pumping}
+                <WatchBody text={t('adh.accum.watch')} tone="rising" />
+              {:else}
+                <WatchBody text={t(accumCue)} tone={accumCue === 'adh.accum.below' ? 'watch' : 'good'} />
+              {/if}
               <div class="actions">
-                <button class="pl-action" disabled={pumping} onclick={startWeek}>{t('adh.build.play')}</button>
-              </div>
-            </div>
-
-          {:else if beat === 'play'}
-            <div class="task">
-              <div class="ticker">{drawnDays < ADH_DAYS.length ? t(`adh.day.${ADH_DAYS[drawnDays].toLowerCase()}`) : t(`adh.day.${ADH_DAYS[ADH_DAYS.length - 1].toLowerCase()}`)}</div>
-              <svg class="curve" viewBox={`0 0 ${ADH_CURVE_W} ${ADH_CURVE_H}`} aria-hidden="true">
-                <rect x={ADH_PLOT_LEFT} y={bandTop} width={ADH_PLOT_RIGHT - ADH_PLOT_LEFT} height={bandBot - bandTop} class="cband" />
-                {#each ADH_DAYS as day, i}
-                  <line x1={dayToX(i)} y1={ADH_PLOT_TOP} x2={dayToX(i)} y2={ADH_PLOT_BOT} class="cgrid" />
-                  <text x={dayToX(i)} y={ADH_PLOT_BOT + 20} class="cday">{day}</text>
-                {/each}
-                {#if drawnDays > 0}
-                  <polyline points={drawnPoints} class="cline" />
-                  <circle cx={dayToX(drawnDays - 1)} cy={levelToY(weekLevels[drawnDays - 1])} r="6" class="cdot" />
+                {#if accumStep < ADH_TRACK_ACCUM.length - 1}
+                  <button class="pl-action" disabled={pumping} onclick={nextDose}>💊 {t('adh.accum.dose')}</button>
+                {:else}
+                  <button class="pl-action" disabled={pumping} onclick={() => (beat = 'q1')}>{t('adh.accum.next')}</button>
                 {/if}
-              </svg>
-              <WatchBody text={t(dayCue)} tone={dayTone} />
-              {#if drawnDays < weekLevels.length}
-                <div class="actions">
-                  <button class="pl-action" disabled={pumping} onclick={nextDay}>{t('adh.play.next')}</button>
-                </div>
-              {/if}
+              </div>
             </div>
 
-          {:else if beat === 'twistDouble'}
-            <div class="scene">
-              <h2 class="pl-h2">{t('adh.twist.prompt')}</h2>
-              {#if !twistGiven}
-                <div class="actions">
-                  <button class="pl-action" disabled={pumping} onclick={twistDrop}>{t('adh.twist.btn')}</button>
-                </div>
-              {:else if pumping}
-                <WatchBody text={t('adh.twist.cue')} tone="rising" />
+          {:else if beat === 'q1'}
+            <div class="task qa">
+              <h2 class="pl-h2 center">{t('adh.q1.prompt')}</h2>
+              {#if q1Done}
+                <p class="fb pl-good">{t(q1Msg ?? 'adh.q1.fb.steady')}</p>
+                <div class="actions"><button class="pl-action" onclick={enterSkip}>{t('adh.next')}</button></div>
               {:else}
-                <p class="fb pl-warn">{t('adh.twist.land')}</p>
-                <div class="actions">
-                  <button class="pl-action" onclick={twistNext}>{t('adh.twist.next')}</button>
-                </div>
-              {/if}
-            </div>
-
-          {:else if beat === 'decide'}
-            <div class="task">
-              {#if decideDone}
-                <WatchBody text={t('adh.decfb.single')} tone="good" />
-              {:else}
-                <h2 class="pl-h2 center">{t('adh.decide.prompt')}</h2>
                 <div class="optcol">
-                  {#each dOptions as o}
-                    <button class="pl-opt" disabled={pumping} onclick={() => pickDecide(o)}>{t(o.labelKey)}</button>
+                  {#each adhOptionsFor(ADH_Q1, adult) as o}
+                    <button class="pl-opt" disabled={pumping} onclick={() => pick(o, 1)}>{t(o.labelKey)}</button>
                   {/each}
                 </div>
-                {#if pumping}<WatchBody text={t('adh.play.watch.up')} tone="rising" />{:else if dMsg}<p class="fb pl-warn">{t(dMsg)}</p>{/if}
+                {#if q1Msg}<p class="fb pl-warn">{t(q1Msg)}</p>{/if}
+              {/if}
+            </div>
+
+          {:else if beat === 'skip'}
+            <div class="task">
+              {#if !skipStarted}
+                <h2 class="pl-h2 center">{t('adh.skip.intro')}</h2>
+                <div class="stage">{@render petri()}{@render pkcurve()}</div>
+                <div class="actions"><button class="pl-action" disabled={pumping} onclick={playSkip}>{t('adh.skip.btn')}</button></div>
+              {:else}
+                <div class="stage">{@render petri()}{@render pkcurve()}</div>
+                {#if pumping}
+                  <WatchBody text={t('adh.skip.watch')} tone="falling" />
+                {:else}
+                  <p class="fb pl-warn">{t('adh.skip.land')}</p>
+                  <div class="actions"><button class="pl-action" onclick={() => (beat = 'q2')}>{t('adh.skip.next')}</button></div>
+                {/if}
+              {/if}
+            </div>
+
+          {:else if beat === 'q2'}
+            <div class="task qa">
+              <h2 class="pl-h2 center">{t('adh.q2.prompt')}</h2>
+              {#if q2Done}
+                <p class="fb pl-good">{t(q2Msg ?? 'adh.q2.fb.normal')}</p>
+                <div class="actions"><button class="pl-action" onclick={enterDouble}>{t('adh.next')}</button></div>
+              {:else}
+                <div class="optcol">
+                  {#each adhOptionsFor(ADH_Q2, adult) as o}
+                    <button class="pl-opt" disabled={pumping} onclick={() => pick(o, 2)}>{t(o.labelKey)}</button>
+                  {/each}
+                </div>
+                {#if q2Msg}<p class="fb pl-warn">{t(q2Msg)}</p>{/if}
+              {/if}
+            </div>
+
+          {:else if beat === 'double'}
+            <div class="task">
+              {#if !doubleGiven}
+                <h2 class="pl-h2 center">{t('adh.double.intro')}</h2>
+                <div class="stage">{@render petri()}{@render pkcurve()}</div>
+                <div class="actions"><button class="pl-action" disabled={pumping} onclick={giveDouble}>💊💊 {t('adh.double.btn')}</button></div>
+              {:else}
+                <div class="stage">{@render petri()}{@render pkcurve()}</div>
+                {#if pumping && !doubleHealed}
+                  <WatchBody text={t('adh.double.watch')} tone="rising" />
+                {:else if !doubleHealed}
+                  <p class="fb pl-warn">{t('adh.double.land')}</p>
+                  <div class="actions"><button class="pl-action" disabled={pumping} onclick={healDouble}>{t('adh.double.healBtn')}</button></div>
+                {:else if pumping}
+                  <WatchBody text={t('adh.double.watch')} tone="falling" />
+                {:else}
+                  <p class="fb pl-good">{t('adh.double.heal')}</p>
+                  <div class="actions"><button class="pl-action" onclick={enterResist}>{t('adh.double.next')}</button></div>
+                {/if}
+              {/if}
+            </div>
+
+          {:else if beat === 'resistance'}
+            <div class="task">
+              {#if !resistStarted}
+                <h2 class="pl-h2 center">{t('adh.resist.intro')}</h2>
+                <div class="stage">{@render petri()}{@render pkcurve()}</div>
+                <div class="actions"><button class="pl-action" disabled={pumping} onclick={stopCourse}>{t('adh.resist.btn')}</button></div>
+              {:else}
+                <div class="stage">{@render petri()}{@render pkcurve()}</div>
+                {#if !resistDone}
+                  <WatchBody text={t('adh.resist.watch')} tone="falling" />
+                {:else}
+                  <p class="fb pl-warn">{t('adh.resist.land')}</p>
+                  <p class="note">{t('adh.resist.note')}</p>
+                  <div class="actions"><button class="pl-action" onclick={() => (beat = 'q3')}>{t('adh.resist.next')}</button></div>
+                {/if}
+              {/if}
+            </div>
+
+          {:else if beat === 'q3'}
+            <div class="task qa">
+              <h2 class="pl-h2 center">{t('adh.q3.prompt')}</h2>
+              {#if q3Done}
+                <p class="fb pl-good">{t(q3Msg ?? 'adh.q3.fb.resist')}</p>
+                <div class="actions"><button class="pl-action" onclick={enterCure}>{t('adh.next')}</button></div>
+              {:else}
+                <div class="optcol">
+                  {#each adhOptionsFor(ADH_Q3, adult) as o}
+                    <button class="pl-opt" disabled={pumping} onclick={() => pick(o, 3)}>{t(o.labelKey)}</button>
+                  {/each}
+                </div>
+                {#if q3Msg}<p class="fb pl-warn">{t(q3Msg)}</p>{/if}
+              {/if}
+            </div>
+
+          {:else if beat === 'cure'}
+            <div class="task">
+              {#if !cureStarted}
+                <h2 class="pl-h2 center">{t('adh.cure.intro')}</h2>
+                <div class="stage">{@render petri()}{@render pkcurve()}</div>
+                <div class="actions"><button class="pl-action" disabled={pumping} onclick={finishCourse}>{t('adh.cure.btn')}</button></div>
+              {:else}
+                <div class="stage">{@render petri()}{@render pkcurve()}</div>
+                {#if !cureDone}
+                  <WatchBody text={t('adh.cure.watch')} tone="good" />
+                {:else}
+                  <p class="fb pl-good">{t('adh.cure.done')}</p>
+                  <div class="actions"><button class="pl-action" onclick={() => (beat = 'won')}>{t('adh.won.peek')}</button></div>
+                {/if}
               {/if}
             </div>
 
           {:else if beat === 'won'}
-            <div class="scene">
+            <div class="brief">
               <h2 class="pl-h2 pl-good">{t('adh.won.title')}</h2>
-              <p class="pl-lead">{t('adh.won.body')}</p>
-              <p class="pl-body">{t('adh.won.peek')}</p>
-              <div class="actions">
-                <button class="pl-action" onclick={() => (beat = 'outcome')}>{t('common.next')}</button>
-              </div>
+              <p class="goal">{t('adh.won.body')}</p>
+              <button class="pl-action" onclick={() => (beat = 'outcome')}>{t('adh.next')}</button>
             </div>
           {/if}
         </div>
@@ -297,42 +430,75 @@
 
 <style>
   .root { position: relative; height: 100%; }
-  .beat { height: 100%; display: grid; align-content: center; justify-items: center; gap: var(--sp-4); animation: beatin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
-  .scene { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); max-width: 880px; text-align: center; }
-  .scene.wide { max-width: 980px; width: 100%; }
-  .task { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); width: 100%; }
+  .beat { height: 100%; display: grid; align-content: center; justify-items: center; gap: var(--sp-3); overflow-y: auto; animation: beatin 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+  .task { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); width: 100%; max-width: 1000px; }
+  .task.qa { gap: var(--sp-4); }
   .center { text-align: center; }
+  .lead-c { color: var(--dim); max-width: 880px; text-align: center; font-size: var(--fs-body); line-height: 1.45; }
   .actions { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; }
-  .fb { font-size: var(--fs-h2); font-weight: 800; line-height: 1.3; max-width: 900px; text-align: center; }
-  .hint { color: var(--dim); max-width: 760px; text-align: center; }
+  .fb { font-size: var(--fs-h2); font-weight: 800; line-height: 1.3; max-width: 920px; text-align: center; }
+  .note { color: var(--dim); max-width: 840px; text-align: center; font-size: var(--fs-body); }
 
-  .factcard { max-width: 680px; text-align: center; animation: factin 0.4s ease both; }
-  .factcard .factkick { display: inline-block; font-size: var(--fs-micro); font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: var(--spm-cyan-bright); margin-bottom: var(--sp-1); }
-  .factcard p { font-size: var(--fs-lead); line-height: 1.45; }
+  /* ── briefing (compact so it never clips inside the 1280×720 frame) ── */
+  .brief { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); max-width: 900px; text-align: center; }
+  .heroes { display: flex; align-items: center; gap: var(--sp-3); font-size: 44px; line-height: 1; }
+  .heroes .vs { font-size: var(--fs-small); font-weight: 900; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+  .heroes .bugs { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--toxic) 60%, transparent)); }
+  .brief .intro { font-size: clamp(19px, 2.1vw, 25px); font-weight: 800; line-height: 1.3; max-width: 880px; }
+  .brief .goal { font-size: var(--fs-body); color: var(--text); line-height: 1.4; max-width: 820px; }
+  .legend { display: grid; gap: 6px; justify-items: start; text-align: start; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); max-width: 740px; margin-top: 2px; }
+  .lgtitle { font-size: var(--fs-micro); font-weight: 900; letter-spacing: 0.8px; text-transform: uppercase; color: var(--dim); }
+  .lgrow { display: flex; align-items: center; gap: 10px; font-size: var(--fs-small); font-weight: 700; line-height: 1.25; }
+  .lgrow i { flex: none; width: 16px; height: 16px; border-radius: 5px; }
+  .lgrow.high i { background: color-mix(in srgb, var(--toxic) 45%, transparent); border: 1px solid var(--toxic); }
+  .lgrow.band i { background: color-mix(in srgb, var(--green) 45%, transparent); border: 1px solid var(--green); }
+  .lgrow.low i { background: color-mix(in srgb, var(--grape) 40%, transparent); border: 1px solid var(--grape); }
+  .brief .pl-action { margin-top: var(--sp-2); }
 
-  /* the 7-day authoring strip */
-  .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-2); width: 100%; max-width: 1000px; }
-  .slot { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 130px; padding: var(--sp-3) var(--sp-1); border: 1.5px solid var(--border); border-radius: var(--r-card); background: var(--surface); color: var(--text); transition: transform 0.1s ease, border-color 0.2s ease; }
-  .slot:active:not(:disabled) { transform: scale(0.96); }
-  .slot .dayname { font-size: var(--fs-small); font-weight: 800; color: var(--dim); }
-  .slot .pills { font-size: 30px; line-height: 1; min-height: 34px; }
-  .slot small { font-size: 11px; font-weight: 700; color: var(--dim); text-align: center; }
-  .slot.s0 { border-color: color-mix(in srgb, var(--grape) 55%, transparent); }
-  .slot.s2 { border-color: color-mix(in srgb, var(--toxic) 55%, transparent); }
+  /* petri + curve side by side */
+  .stage { display: grid; grid-template-columns: minmax(190px, 0.55fr) minmax(0, 1fr); gap: var(--sp-4); align-items: center; width: 100%; max-width: 980px; }
 
-  .ticker { font-size: var(--fs-h1); font-weight: 900; color: color-mix(in srgb, var(--story) 75%, var(--text)); }
+  /* ── bacteria petri ── */
+  .petricol { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .petri { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 230px; border-radius: 50%; border: 2px solid var(--border); background: radial-gradient(circle at 38% 32%, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 60%, transparent); overflow: hidden; transition: box-shadow 0.4s ease, border-color 0.4s ease; }
+  .petri.resistant { border-color: color-mix(in srgb, var(--toxic) 70%, transparent); box-shadow: 0 0 36px color-mix(in srgb, var(--toxic) 30%, transparent); }
+  .petri.cleared { border-color: color-mix(in srgb, var(--green) 65%, transparent); box-shadow: 0 0 30px color-mix(in srgb, var(--green) 22%, transparent); }
+  .plabel { font-size: var(--fs-small); font-weight: 800; letter-spacing: 0.3px; color: var(--dim); text-align: center; }
+  .plabel.warn { color: var(--toxic); text-shadow: 0 0 12px color-mix(in srgb, var(--toxic) 50%, transparent); }
+  .plabel.good { color: var(--green); }
 
-  /* drawn PK concentration–time curve (qualitative; band only, no numbers) */
-  .curve { width: 100%; max-width: 760px; height: auto; background: rgba(255, 255, 255, 0.03); border-radius: var(--r-card); }
+  .bug { position: absolute; width: 16px; height: 12px; border-radius: 50%; transform: translate(-50%, -50%) rotate(18deg); background: radial-gradient(circle at 35% 32%, #d6f5b0, #7fbf45 70%); box-shadow: 0 0 6px rgba(127, 191, 69, 0.5); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .bug::before, .bug::after { content: ''; position: absolute; width: 6px; height: 2px; border-radius: 2px; background: inherit; top: 50%; }
+  .bug::before { left: -5px; transform: translateY(-50%) rotate(20deg); }
+  .bug::after { right: -5px; transform: translateY(-50%) rotate(-20deg); }
+  .bug.tough { background: radial-gradient(circle at 35% 32%, #ffe1a8, #e8a13c 70%); box-shadow: 0 0 8px rgba(232, 161, 60, 0.6); }
+  .bug.resistant { width: 18px; height: 14px; background: radial-gradient(circle at 35% 32%, #ffc1c1, #e23b4f 70%); box-shadow: 0 0 12px rgba(226, 59, 79, 0.75); animation: throb 1.3s ease-in-out infinite, bloom 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both; animation-delay: calc(var(--i) * 0.06s), calc(var(--i) * 0.06s); }
+  .bug.dead { opacity: 0; transform: translate(-50%, -50%) scale(0.2) rotate(18deg); }
+
+  /* ── PK curve ── */
+  .curve { width: 100%; max-width: 660px; height: auto; background: rgba(255, 255, 255, 0.03); border-radius: var(--r-card); }
   .cband { fill: color-mix(in srgb, var(--green) 20%, transparent); }
-  .cgrid { stroke: var(--border); stroke-width: 1; opacity: 0.4; }
-  .cday { fill: var(--dim); font-size: 14px; font-weight: 800; text-anchor: middle; }
-  .cline { fill: none; stroke: var(--story); stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
-  .cdot { fill: #fff; stroke: var(--story); stroke-width: 3; }
+  .zhigh { fill: color-mix(in srgb, var(--toxic) 9%, transparent); }
+  .zlow { fill: color-mix(in srgb, var(--grape) 9%, transparent); }
+  .limit { stroke: color-mix(in srgb, var(--toxic) 65%, transparent); stroke-width: 1.5; stroke-dasharray: 6 5; }
+  .killline { stroke: color-mix(in srgb, var(--grape) 70%, transparent); stroke-width: 1.5; stroke-dasharray: 6 5; }
+  .axis { stroke: var(--border); stroke-width: 1.5; }
+  .axislbl { fill: var(--dim); font-size: 12px; font-weight: 700; text-anchor: end; }
+  .zlbl { font-size: 13px; font-weight: 800; }
+  .zlbl.high { fill: color-mix(in srgb, var(--toxic) 85%, var(--text)); }
+  .zlbl.band { fill: color-mix(in srgb, var(--green) 80%, var(--text)); }
+  .zlbl.low { fill: color-mix(in srgb, var(--grape) 85%, var(--text)); }
+  .cline { fill: none; stroke: var(--story, var(--spm-cyan)); stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
+  .cdot { fill: #fff; stroke: var(--story, var(--spm-cyan)); stroke-width: 3; }
 
-  .optcol { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; max-width: 720px; }
+  .optcol { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; max-width: 760px; }
 
   @keyframes beatin { from { opacity: 0; transform: translateY(18px); } }
-  @keyframes factin { from { opacity: 0; transform: translateY(8px); } }
-  @media (prefers-reduced-motion: reduce) { .beat, .factcard { animation: none; } }
+  @keyframes throb { 50% { transform: translate(-50%, -50%) scale(1.12) rotate(18deg); } }
+  @keyframes bloom { from { opacity: 0; transform: translate(-50%, -50%) scale(0.1) rotate(18deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .beat { animation: none; }
+    .bug { transition: none; }
+    .bug.resistant { animation: none; }
+  }
 </style>

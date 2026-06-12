@@ -1,5 +1,19 @@
 # Build spec — „Drei Körper, eine Pille" (id: `gene`) · Drug–gene (pharmacogenetics)
 
+> **⚠️ SUPERSEDED — v2.1 overhaul (2026-06-12).** The shipped `gene` story no longer uses the
+> **predict-then-pour** wager described below. After playtest feedback it was rebuilt as
+> **OBSERVE → PUZZLE → REVEAL**: give the identical pill to three **distinct** kids
+> side-by-side (👧🏻 Mara / 👦🏽 Jonas / 🧒🏿 Emil), **freeze a marker per kid**, answer
+> „Huch? Was ist denn hier los?", then **assign the genotype machines** (🐢/🚶/🚀) — the
+> *inversion* puzzle (high Spiegel = fast machine, because Codein is a prodrug the machine
+> *makes* the painkiller) — rewarded with the **animated** PK curves, then the unchanged
+> treat-Mara / treat-Emil / medicine-cabinet arc. Other changes: **no auto-pump on mount**
+> (first move is the player's „Los geht's"); **moderate demo levels** (Emil tops out at **76**,
+> not the old 90); kid copy now **explains „Codein"**. Sources of truth: `stories/gene.ts`,
+> `stories/gene.locale.ts`, `screens/GenePlay.svelte`, `sim/gene.sim.ts`. The level arc (§3),
+> data-model shape (§8), copy conventions (§9) and the dead-still trap below still hold; the
+> beat flow (§4) and the wager mechanic (§1/§5/§6) are historical.
+
 Implementation-ready spec for the torso-first rebuild of the `gene` story. Authoritative
 inputs: [`blueprint.md`](../blueprint.md) (wins on any conflict), the Frühstück exemplar
 (`screens/FruehstueckPlay.svelte`, `stories/fruehstueck.ts`, `sim/fruehstueck.sim.ts`),

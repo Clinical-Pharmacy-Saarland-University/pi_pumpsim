@@ -127,7 +127,7 @@
         {/each}
       </div>
       <div class="actions">
-        <button class="btn back" onclick={onBack}>← {t('stories.title')}</button>
+        <button class="btn back" onclick={onBack}><span class="arrow">←</span> {t('stories.title')}</button>
         <button class="btn primary again" onclick={onRetry}>{t('common.retry')}</button>
       </div>
     </section>
@@ -313,7 +313,11 @@
   }
   .facts p {
     position: relative;
-    padding: 17px 20px 17px 30px;
+    /* logical padding: the accent bar sits on the inline-start edge (::before
+       uses inset-inline-start), so the larger pad must follow it — in RTL both
+       move to the right together instead of fighting each other */
+    padding-block: 17px;
+    padding-inline: 30px 20px;
     border: 1px solid var(--border);
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.055);
@@ -357,6 +361,13 @@
   }
   .actions .back {
     background: rgba(255, 255, 255, 0.075);
+  }
+  .actions .back .arrow {
+    display: inline-block;
+  }
+  /* the back-nav arrow points the other way in RTL (Arabic): ← reads as → */
+  :global([dir='rtl']) .actions .back .arrow {
+    transform: scaleX(-1);
   }
   .actions .again {
     box-shadow: 0 18px 46px rgba(76, 201, 240, 0.36);

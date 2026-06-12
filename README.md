@@ -77,13 +77,15 @@ Where the knobs live (so you don't have to grep for magic numbers):
 
 | What | Where | Notes |
 |---|---|---|
-| **Pump / torso physical** — flow rates, deadbands, `torso_volume_ml`, `dead_space_ml`, **`overpump_ml`** (absolute ml overpumped past empty on init/reset, default **100**), **`prime_duty`** (gentle, no-splash prime-to-baseline duty 0–1, default **0.4**), duty→flow `samples` | [`backend/app/game/calibration.py`](backend/app/game/calibration.py) → `DEFAULT` | Per-machine override: `backend/calibration.json` (gitignored, written by the admin wizard). Loaded on boot. |
+| **Pump / torso physical** — flow rates, deadbands, `torso_volume_ml`, **`torso_dead_space_ml`** (unpumpable residual below level 0; **only the first Initialize after boot drains it**, default **100**), `dead_space_ml` (tubing), **`overpump_ml`** (absolute ml overpumped past empty on init/reset, default **100**), **`prime_duty`** (gentle, no-splash prime-to-baseline duty 0–1, default **0.35**), duty→flow `samples` | [`backend/app/game/calibration.py`](backend/app/game/calibration.py) → `DEFAULT` | Per-machine override: `backend/calibration.json` (gitignored, written by the admin wizard). Loaded on boot. |
 | **Level model** — `baseline`, `band_low/high`, `critical_low/high`, `capacity` | [`backend/app/game/controller.py`](backend/app/game/controller.py) → `LevelConfig` | **Must match** the frontend mirror `LEVELS` in [`frontend/src/lib/flow.ts`](frontend/src/lib/flow.ts) — these are the *taped* band/lines on the torso. |
 | **Deployment / hardware wiring** — `PUMP_BACKEND`, IBT-2 pins, `tick_hz`, pump rate | `backend/.env` (copy `.env.example`) → [`backend/app/config.py`](backend/app/config.py) | Pydantic Settings. `PUMP_BACKEND=mock\|real`. |
 
 **Init / reset overpump** is *absolute*, not a ratio: the torso is drained by
-`water + dead_space_ml + overpump_ml`, where `water` = the whole torso for **Initialize / Home**
-(level untrusted) or the **tracked end-of-run level** for a between-runs reset (fast). Raise
+`water + dead_space_ml + overpump_ml`, where `water` = the whole torso for **Initialize** (level
+untrusted) or the **tracked end-of-run level** for a between-runs reset (fast). The **first
+Initialize after boot** also adds `torso_dead_space_ml` (the unpumpable residual a physically-full
+torso holds below level 0); later Initializes, the between-runs reset and prime-only never do. Raise
 `overpump_ml` if a reset ever stops short of empty; lower it if it wastes time pulling air.
 
 ## Hardware

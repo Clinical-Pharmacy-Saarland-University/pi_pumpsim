@@ -46,7 +46,7 @@
     { id: 'ddi', name: 'Blut-Balance (DDI)', icon: '💊', prefixes: ['ddi'] },
     { id: 'organ', name: 'Nieren-Skala (Organ)', icon: '🫘', prefixes: ['organ'] },
     { id: 'gene', name: 'Drei Zwillinge (Gen)', icon: '🧬', prefixes: ['gene'] },
-    { id: 'adherence', name: 'Wochen-Pillenplan (Adhärenz)', icon: '⏰', prefixes: ['adh'] },
+    { id: 'adherence', name: 'Antibiotika-Kur (Adhärenz/Resistenz)', icon: '🦠', prefixes: ['adh'] },
     { id: 'johanniskraut', name: 'Pflanzliches Leck (Induktion)', icon: '🌿', prefixes: ['jk'] },
     { id: 'admin', name: 'Admin · Kalibrierung · Twin', icon: '⚙️', prefixes: ['admin', 'twin', 'cal'] },
   ]

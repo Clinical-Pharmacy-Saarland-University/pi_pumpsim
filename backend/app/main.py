@@ -90,6 +90,7 @@ class CalibrationModel(BaseModel):
     rate_in: float | None = Field(default=None, ge=0)
     rate_out: float | None = Field(default=None, ge=0)
     torso_volume_ml: float | None = Field(default=None, gt=0)
+    torso_dead_space_ml: float | None = Field(default=None, ge=0, le=2000)
     dead_space_ml: float | None = Field(default=None, ge=0)
     overpump_ml: float | None = Field(default=None, ge=0, le=2000)
     prime_duty: float | None = Field(default=None, gt=0, le=1)
@@ -119,12 +120,12 @@ def reset_level() -> dict:
     return {"ok": True}
 
 
-def _prepare_plan(from_level: float | None = None) -> dict:
+def _prepare_plan(from_level: float | None = None, init: bool = False) -> dict:
     """Compute the re-home plan: how much to overpump OUT (empty) and to prime IN.
 
     The drain is an ABSOLUTE volume — we trust the tracked level, so there's no ratio:
 
-        empty_ml = water_ml + dead_space_ml + overpump_ml
+        empty_ml = water_ml + dead_space_ml + overpump_ml [+ torso_dead_space_ml on init]
 
     where `water_ml` is the water we believe is in the torso, `dead_space_ml` clears the
     tube, and `overpump_ml` (calibration, default 100 ml) is a fixed safety margin that
@@ -135,6 +136,10 @@ def _prepare_plan(from_level: float | None = None) -> dict:
         Initialize and the marking Home, since the level isn't trusted.
       * a level 0..capacity → the KNOWN end-of-run level (the twin is homed). A
         between-runs reset only drains that much (+ dead + overpump), so it's much faster.
+    `init` adds the unpumpable `torso_dead_space_ml` (the residual under the pump intake,
+    below level 0): a physically-full torso holds capacity + that residual. The caller sets
+    `init` only for the FIRST Initialize after boot; later Initializes, the between-runs
+    reset, Home and prime-only all leave it.
     Prime is identical either way: the overpump leaves the torso empty, so it always
     re-primes the tube dead-space + baseline volume.
     """
@@ -145,13 +150,15 @@ def _prepare_plan(from_level: float | None = None) -> dict:
     rate_in = float(r.rate_in_ml_s or 0.0)
     dead = float(cal.get("dead_space_ml") or 0.0)
     overpump = float(cal.get("overpump_ml") or 0.0)
+    torso_dead = float(cal.get("torso_dead_space_ml") or 0.0)
     cap = float(r.ctrl.cfg.capacity or 100.0)
     baseline = float(r.ctrl.cfg.baseline or 0.0)
 
     # water to remove: a full torso (trust-reset) or the known level (fast between-runs prep)
     drain_level = cap if from_level is None else max(0.0, min(cap, float(from_level)))
     water_ml = (drain_level / cap * vol) if cap else 0.0
-    empty_ml = water_ml + dead + overpump  # torso water + tube + absolute safety margin
+    # torso water + tube + absolute safety margin (+ the unpumpable torso residual on init)
+    empty_ml = water_ml + dead + overpump + (torso_dead if init else 0.0)
     if rate_out > 0:
         empty_s = empty_ml / rate_out
         empty_src = "derived" if from_level is None else "from_level"
@@ -177,6 +184,8 @@ def _prepare_plan(from_level: float | None = None) -> dict:
         "empty_src": empty_src,
         "water_ml": round(water_ml, 1),
         "overpump_ml": round(overpump, 1),
+        "torso_dead_space_ml": round(torso_dead, 1),
+        "init": init,
         "empty_ml": round(empty_ml, 1),
         "from_level": round(drain_level, 1),
         "prime_ml": round(prime_ml, 1),
@@ -196,7 +205,9 @@ def _prepare_plan(from_level: float | None = None) -> dict:
 
 @app.get("/api/level/prepare_plan")
 def get_prepare_plan() -> dict:
-    return _prepare_plan()
+    # the admin Setup tab shows the Initialize numbers → reflect whether the NEXT Initialize
+    # would still drain the torso dead space (only the first one after boot does)
+    return _prepare_plan(init=not _runner().initialized_once)
 
 
 class PrepareRequest(BaseModel):
@@ -213,9 +224,14 @@ def prepare_torso(req: PrepareRequest | None = None) -> dict:
     """
     r = _runner()
     full = bool(req.full) if req else False
-    from_level = None if (full or not r.homed) else r.ctrl.level
-    plan = _prepare_plan(from_level)
+    full_drain = full or not r.homed  # Initialize / first boot drain the whole torso...
+    from_level = None if full_drain else r.ctrl.level  # ...else only the known end-of-run level
+    # the unpumpable torso dead-space is drained ONLY by the very first Initialize after boot
+    first_init = full_drain and not r.initialized_once
+    plan = _prepare_plan(from_level, init=first_init)
     r.prepare(plan["empty_s"], plan["prime_s"], plan["prime_duty"])
+    if full_drain:
+        r.initialized_once = True
     return {"ok": True, **plan}
 
 

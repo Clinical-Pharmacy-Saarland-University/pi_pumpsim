@@ -71,6 +71,10 @@ class LevelRunner:
         self._seq: list[dict] = []  # queued timed steps (empty / prepare / mark goto)
         self._sync_level_after: float | None = None  # snap twin to this level when the seq ends
         self.homed = False  # is the twin anchored to a known physical level?
+        # has a full Initialize run since this process booted? The first one drains the
+        # unpumpable torso dead-space (a cold torso can be physically full); later ones
+        # don't. NOT cleared by reset() — a frontend reload must not re-arm it.
+        self.initialized_once = False
         # DEV physics sim (mock only): a hidden TRUE physical level the system doesn't
         # know — lets us play the init/home workflow against a torso that already has
         # water. Integrated from the actual pump commands at the calibrated rate.
@@ -124,6 +128,7 @@ class LevelRunner:
         cap = self.ctrl.cfg.capacity or 100.0
         self.sim_tube_units = self.dead_space_ml / self.volume_ml * cap if self.volume_ml > 0 else 0.0
         self.reset()  # belief goes back to a fresh, untrusted boot
+        self.initialized_once = False  # a simulated power-on re-arms the first-init dead-space drain
 
     def clear_sim(self) -> None:
         self.sim_active = False

@@ -1,4 +1,6 @@
-Johanniskraut story assets
-
-No external raster images are used in this story. The in-game tea, capsule, label,
-mechanism, and leak-finale visuals are built from local CSS and emoji text.
+Johanniskraut story investigation photos — via Wikimedia Commons.
+Each line: file  —  author  (license)  —  source page
+johanniskraut.jpg  —  Salicyna  (CC BY-SA 4.0)  —  https://commons.wikimedia.org/wiki/File:Hypericum_perforatum_2019-06-18_2337.jpg
+kamille.jpg  —  Andrea Moro  (CC BY-SA 3.0)  —  https://commons.wikimedia.org/wiki/File:Matricaria_chamomilla_flower_(22).jpg
+pfefferminze.jpg  —  Joshua T Polito  (CC0)  —  https://commons.wikimedia.org/wiki/File:Peppermint_Plant.jpg
+ingwer.jpg  —  Burdigo  (CC0)  —  https://commons.wikimedia.org/wiki/File:Gingembre_(march%C3%A9_de_Bergerac).jpg

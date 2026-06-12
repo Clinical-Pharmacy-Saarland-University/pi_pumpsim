@@ -63,7 +63,9 @@ export interface PreparePlan {
   empty_src: 'derived' | 'from_level' | 'fallback'
   water_ml: number // torso water to remove (capacity for a full re-zero, else the known level)
   overpump_ml: number // absolute safety margin pumped past empty
-  empty_ml: number // = water_ml + dead_space_ml + overpump_ml
+  torso_dead_space_ml: number // unpumpable residual below level 0; only Initialize drains it
+  init: boolean // true = a full Initialize drain (adds torso_dead_space_ml)
+  empty_ml: number // = water_ml + dead_space_ml + overpump_ml (+ torso_dead_space_ml when init)
   from_level: number // level assumed full when draining (capacity = full re-zero)
   prime_ml: number
   prime_s: number

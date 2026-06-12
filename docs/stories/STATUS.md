@@ -10,7 +10,7 @@ _Autonomous session, 2026-06-08._
 | 3 | **Drei Zwillinge, eine Pille** | Codein / CYP2D6 (gene) | same-dose **triptych** (predict 3 genotypes) | v2 |
 | 4 | **Der Funken-Plan** | Clarithromycin × Phenprocoumon (DDI) | tap-tap **pairing** (connect the clash) | v2 |
 | 5 | **Die Nieren-Skala** | Metformin × low eGFR (organ) | read **gauge → set dose dial** | v2 |
-| 6 | **Der Wochen-Pillenplan** | Lamotrigin (adherence) | **build-a-week timeline**, play it back | v2 |
+| 6 | **Die Antibiotika-Kur** | Antibiotikum × Adhärenz/Resistenz | **guided PK teaching arc** (accumulate → skip → „nachholen"-double → Resistenz) | v2 |
 
 All six: distinct mechanics + endings, DE young+adult copy, **headless sim (`npx tsx sim/<id>.sim.ts`) + browser smoke** verified, `svelte-check` clean. All cards `available: true`.
 

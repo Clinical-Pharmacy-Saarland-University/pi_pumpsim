@@ -15,13 +15,16 @@ translucent **3D-printed torso** (~2–3 L) with dyed water; the water level = t
 concentration. A **fixed taped band** on the torso = the therapeutic window. The player
 makes dosing decisions on the touchscreen; the torso fills/drains to show the result.
 
-UI language **German-first** (i18n-ready: DE/EN/NL/AR; only DE written so far, the rest
-fall back to German).
+UI language **German-first**, now fully translated to **DE/EN/FR/NL/AR** — all six stories
+plus the player-facing screens (start, story select, outcome, reset), in both age registers.
+The backstage admin/calibration is still German (operator-facing); any untranslated key
+falls back to German.
 
 ## Where we stand (2026-06)
 
 - **All 6 stories built & playable** (each a distinct mechanic) in the browser (mock) and
-  on the Pi (kiosk). Verified via headless sims + Playwright. DE-only (others fall back).
+  on the Pi (kiosk). Verified via headless sims + Playwright. Fully translated
+  **DE/EN/FR/NL/AR** (player-facing; backstage admin/calibration still DE).
 - **Deployed on the real Pi** (kiosk, landscape, touch); runs **mock** by default
   (`PUMP_BACKEND=real` for hardware).
 - **Pump works on real hardware** (IBT-2, hardware PWM, VCC **3.3 V**): `RealPump`, an
@@ -69,7 +72,7 @@ with **no code change** (just an env var):
   `[55,70]`, baseline `42`, critical lines `35`/`80`. Tunables in
   `backend/app/game/controller.py` and `frontend/src/lib/events.ts`.
 - **All 6 stories built**, each a distinct mechanic (grapefruit photo-grid · Johanniskraut
-  leak-defense · gene triptych · DDI pairing · organ gauge→dial · adherence build-a-week).
+  leak-defense · gene triptych · DDI pairing · organ gauge→dial · antibiotic course→resistance).
   Story 1 uses the v1 engine; 2–6 are self-contained "v2" components (`game.phase==='play2'`,
   one `screens/<Id>Play.svelte` each). See `docs/stories/STATUS.md`.
 - **Secret admin** (full-screen): **triple-tap the SafePolyMed logo** (or press `A`) → jog
@@ -179,6 +182,9 @@ just tag 0.0.1-alpha  # write VERSION, commit, annotated tag v0.0.1-alpha + push
    interpolated duty→flow samples) are done. Remaining: (a) wire **Kalibrierter Reset** into the
    „Patient wird vorbereitet …" between-runs screen; (b) measure `dead_space_ml` on the real rig
    (currently null → no tube compensation). Protocol: [`docs/calibration.md`](docs/calibration.md).
-2. **i18n**: real EN / FR / NL / AR dictionaries (AR also needs RTL); verify drug/Fachinfo wording.
+2. **i18n**: ✅ EN/FR/NL/AR dictionaries done for all six stories + player-facing screens (both
+   registers); app runs RTL for AR (dir=rtl + logical CSS). Remaining: translate the backstage
+   **admin/calibration** (`admin.*`/`cal.*`, still DE), a per-story Arabic RTL visual pass, and
+   verify drug/Fachinfo wording against the current Fachinformation.
 3. **Feel-tuning** (drift speed, band width, dose levels) once the real torso is calibrated.
 4. Optional: an LED strip inside the torso (green/red glow), sound, age-adaptive wording.

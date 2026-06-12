@@ -1,5 +1,17 @@
 # Build spec — „Der müde Filter" (`organ`)
 
+> ⚠️ **SUPERSEDED (2026-06-12) by the v3 „two-exits" rework.** This spec's CALIBRATE-A-LIVE-
+> INFLOW / live-cut + filter-plan design was rebuilt after the user found it boring and unclear.
+> The shipped story now uses the **TWO-EXITS idea**: medicine leaves via the LEBER (metabolism)
+> or the NIERE (excretion); Metformin is special — the liver doesn't touch it, so it leaves ONLY
+> via the kidney → a tired kidney makes the same dose pile up. New beats: dose-twist → discover
+> the single renal exit (kidney **animation**, `lib/OrganExits.svelte`) → adjust the dose →
+> **drug-sort** finale (which drugs lean on the kidney; teaches „depends on the drug"). Wording
+> fixes: no „Spiegel"/„zittert"/„Hahn" for the young register. The §3 level arc + engine-legal
+> rules still hold (dose 62 · creep 76 · stau 78 · over 86 · under 46). Authoritative now:
+> `screens/OrganPlay.svelte`, `stories/organ.ts`, `stories/organ.locale.ts`, `sim/organ.sim.ts`.
+> Read those + the [[organ-rework]] memory note before this file.
+
 Implementation-ready specification for the SafePolyMed story **„Der müde Filter"**
 (Organ/disease–drug interaction · renal function · Metformin × eGFR↓).
 

@@ -24,7 +24,8 @@ def test_missing_file_returns_defaults(tmp_path):
     assert loaded["rate_in"] == 41.9
     assert loaded["torso_volume_ml"] == 1800.0
     assert loaded["overpump_ml"] == 100.0  # absolute init/reset overpump margin
-    assert loaded["prime_duty"] == 0.4     # gentle, no-splash prime-to-baseline duty
+    assert loaded["prime_duty"] == 0.35    # gentle, no-splash prime-to-baseline duty
+    assert loaded["torso_dead_space_ml"] == 100.0  # unpumpable residual (Initialize-only)
     # returned object is a copy — mutating it must not corrupt the module default
     loaded["rate_in"] = 5.0
     loaded["samples"].append({"x": 1})
@@ -39,14 +40,15 @@ def test_partial_file_filled_with_defaults(tmp_path):
     assert loaded["rate_in"] == 7.0
     assert loaded["deadband_in"] == 0.16  # missing keys filled from the default calibration
     assert loaded["torso_volume_ml"] == 1800.0  # older files gain the new field
-    assert len(loaded["samples"]) == 8
+    assert len(loaded["samples"]) == 6  # in/out at 100/70/40 % (60 % was never measured)
 
 
 def test_torso_volume_round_trip(tmp_path):
     p = tmp_path / "c.json"
-    save_calibration({"torso_volume_ml": 2200.0}, p)
+    save_calibration({"torso_volume_ml": 2200.0, "torso_dead_space_ml": 120.0}, p)
     loaded = load_calibration(p)
     assert loaded["torso_volume_ml"] == 2200.0
+    assert loaded["torso_dead_space_ml"] == 120.0
 
 
 def test_corrupt_file_returns_defaults(tmp_path):

@@ -11,6 +11,8 @@
 
   type Tab = 'pump' | 'calibration' | 'setup' | 'system'
   let tab = $state<Tab>('setup')
+  // the Calibration tab is split into two sub-tabs so neither view is cramped
+  let calSub = $state<'values' | 'deadspace'>('values')
 
   let wizard = $state(false)
   let pad = $state<null | { label: string; unit: string; set: (v: number) => void }>(null)
@@ -354,6 +356,11 @@
         </div>
       </div>
     {:else if tab === 'calibration'}
+      <div class="subtabs">
+        <button class:on={calSub === 'values'} onclick={() => (calSub = 'values')}>Values</button>
+        <button class:on={calSub === 'deadspace'} onclick={() => (calSub = 'deadspace')}>Dead space</button>
+      </div>
+      {#if calSub === 'values'}
       <button class="wizbtn" onclick={() => (wizard = true)}>▶ Start guided calibration</button>
       <p class="hint">
         All calibration values are set in the guided flow — it now pre-fills the current values
@@ -370,6 +377,9 @@
           <button class="vedit" onclick={() => openPad('Torso volume', ' ml', (v) => saveCal({ torso_volume_ml: v }))}>
             <span>Torso volume ✎</span><b>{val(cal?.torso_volume_ml, ' ml')}</b>
           </button>
+          <button class="vedit" onclick={() => openPad('Torso dead space', ' ml', (v) => saveCal({ torso_dead_space_ml: v }))}>
+            <span>Torso dead ✎</span><b>{val(cal?.torso_dead_space_ml, ' ml')}</b>
+          </button>
           <button class="vedit" onclick={() => openPad('Dead space', ' ml', (v) => saveCal({ dead_space_ml: v }))}>
             <span>Dead space ✎</span><b>{val(cal?.dead_space_ml, ' ml')}</b>
           </button>
@@ -384,7 +394,7 @@
           <div><span>Flow samples</span><b>{cal?.samples?.length ?? 0}</b></div>
         </div>
       </div>
-
+      {:else}
       <div class="block">
         <div class="bhead">Measure dead space <span class="dim">· two-run difference</span></div>
         <div class="dsrow">
@@ -444,6 +454,7 @@
           {/if}
         {/if}
       </div>
+      {/if}
     {:else if tab === 'setup'}
       <div class="block trust" class:homed={game.level?.homed}>
         {#if game.level?.homed}
@@ -723,6 +734,30 @@
     background: linear-gradient(120deg, var(--spm-cyan, #00beca), var(--green, #1f9d6b));
     color: #04222a;
     border-color: transparent;
+  }
+
+  /* secondary segmented control inside a tab (e.g. Calibration → Values / Dead space) */
+  .subtabs {
+    display: inline-flex;
+    gap: 6px;
+    align-self: start;
+    padding: 4px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .subtabs button {
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    padding: 9px 22px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--dim);
+  }
+  .subtabs button.on {
+    background: var(--surface2);
+    color: var(--spm-cyan-bright, #28e6e0);
   }
 
   /* tab content — fills the remaining height. Fits without scrolling on the real Pi

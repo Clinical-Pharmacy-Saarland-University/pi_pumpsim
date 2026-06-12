@@ -25,7 +25,11 @@
 </script>
 
 <div class="rating" style="--sz:{size}px" role="img" aria-label={`${countLabel} — ${title}`}>
-  <div class="stars">
+  <!-- dir=ltr keeps the rating reading the same way in every language: stars fill
+       left→right and the half-star stays on the trailing end (rating widgets are
+       conventionally LTR even in Arabic UIs). The rank title beside it still
+       inherits RTL so the Arabic label aligns correctly. -->
+  <div class="stars" dir="ltr">
     {#each SLOTS as i}
       <span
         class="star"

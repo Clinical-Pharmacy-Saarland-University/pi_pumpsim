@@ -8,12 +8,20 @@
 <div class="select">
   <Backdrop />
 
-  <header>
+  <!-- dir=ltr pins the back button top-left in every language (same physical-
+       consistency rule as the card grid below): the ← always points toward the
+       screen edge it sits on, so no RTL arrow flip either. -->
+  <header dir="ltr">
     <button class="back" onclick={back}><span class="arrow">←</span>{t('common.back')}</button>
     <h1>{t('stories.title')}</h1>
     <div class="spacer"></div>
   </header>
 
+  <!-- Idiomatic RTL: the frame (.pi) is dir="rtl" for Arabic, so this grid flows
+       right-to-left and story 1 lands top-right — where an Arabic reader's eye
+       starts. Inside each card, text right-aligns and the badges mirror via the
+       logical CSS below. (Only the Start screen pins LTR; content screens mirror,
+       which is what Arabic speakers expect.) -->
   <div class="grid">
     {#each STORIES as s, i}
       <!-- only available stories are playable; the rest are disabled and show a
@@ -77,13 +85,6 @@
     background: var(--surface2);
     border-color: var(--spm-cyan);
     transform: scale(0.96);
-  }
-  .arrow {
-    display: inline-block;
-  }
-  /* the back arrow points the other way in RTL (.pi gets dir="rtl") */
-  :global([dir='rtl']) .arrow {
-    transform: scaleX(-1);
   }
   h1 {
     font-weight: 900;
@@ -212,7 +213,9 @@
   .stamp {
     position: absolute;
     top: 50%;
-    inset-inline-start: 50%;
+    /* physical `left`, not inset-inline-start: the centering translate(-50%) is
+       physical too, and in RTL the logical pair lands a full width off-center */
+    left: 50%;
     transform: translate(-50%, -50%) rotate(-9deg);
     display: inline-flex;
     align-items: center;

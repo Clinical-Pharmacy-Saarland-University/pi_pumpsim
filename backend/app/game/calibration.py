@@ -23,21 +23,24 @@ DEFAULT: dict = {
     "rate_in": 41.9,            # ml/s at 100% duty, fill
     "rate_out": 41.3,           # ml/s at 100% duty, drain
     "torso_volume_ml": 1800.0,  # ml from level 0 to level 100 (capacity of the torso)
-    "dead_space_ml": None,      # ml of tubing dead-volume (null -> treated as 0 / auto)
+    "torso_dead_space_ml": 100.0,  # ml of unpumpable residual BELOW level 0 (sits under the pump
+                                # intake). Only the FIRST Initialize after boot drains it (a cold
+                                # torso can be full = volume + this); later inits, the between-runs
+                                # reset and prime-only never touch it.
+    "dead_space_ml": None,      # ml of TUBING dead-volume (null -> treated as 0 / auto)
     "overpump_ml": 100.0,       # ml to overpump PAST empty on init/reset — the absolute safety
                                 # margin (covers tracking error); empty = water + dead_space + this
-    "prime_duty": 0.4,          # duty 0..1 for the prime-to-baseline IN run — gentle so the
+    "prime_duty": 0.35,         # duty 0..1 for the prime-to-baseline IN run — gentle so the
                                 # inflow doesn't splash; the prime DURATION is sized to this flow
+                                # (measure a 35 % IN sample in the wizard for an exact duration)
     "empty_overpump_s": None,   # legacy seconds override for the admin "Entleeren" button only
     "prime_in_ml": None,        # ml to pump IN after empty (else auto-derived to baseline)
     "samples": [                # [{"dir": "in"|"out", "duty": 0..1, "ml_per_s": float}]
         {"dir": "in", "duty": 1.0, "ml_per_s": 41.9},
         {"dir": "in", "duty": 0.7, "ml_per_s": 27.5},
-        {"dir": "in", "duty": 0.6, "ml_per_s": 17.4},
         {"dir": "in", "duty": 0.4, "ml_per_s": 10.5},
         {"dir": "out", "duty": 1.0, "ml_per_s": 41.3},
         {"dir": "out", "duty": 0.7, "ml_per_s": 27.3},
-        {"dir": "out", "duty": 0.6, "ml_per_s": 23.0},
         {"dir": "out", "duty": 0.4, "ml_per_s": 10.8},
     ],
 }

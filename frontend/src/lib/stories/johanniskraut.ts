@@ -1,117 +1,83 @@
 // Story „Das pflanzliche Leck" (Induktion · Johanniskraut × Ciclosporin) — pure data.
-// Torso-first v2 (docs/stories/overhaul/build-johanniskraut.md). Signature mechanic:
-// READ-A-DELAYED-LEAK & BACK-DATE — investigate a fixed week, read the delayed fall on
-// the body, blame the QUIET day the tea started (Di = a true no-move), then stop the
-// leak live. DOWN only: induction lowers the Spiegel; there is no overdose path. No
-// on-screen vessel/meter. No Svelte runes → headless-testable.
+// v2 torso-first, REWORKED flow (2026-06): dose → „eine Woche später" leak reveal →
+// magnifier investigation (find the herbal culprit among Frau Bergers neue Tees) →
+// a plain-language mechanism explanation (induction + the lag) → a calm live leak-stop
+// finale. DOWN only: induction lowers the Spiegel; there is NO overdose path. No
+// on-screen vessel/meter — the real pump is the readout. No Svelte runes → headless-testable.
 import { LEVELS, type Outcome } from '../flow'
 
-// ── levels (from the single source of truth; down-only story) ──────────────────
-export const JK_BASELINE = 40 // prime: below the band, ungeschützt (a watchable fill to dose)
+// ── levels (single source of truth; down-only story) ───────────────────────────
+export const JK_BASELINE = LEVELS.start // 20 — prime = the reset-home level, so the DOSE is the only pre-game rise
 export const JK_DOSE = LEVELS.dose // 62 — standard dose lands in the green window
-export const JK_READ_LEVEL = 49 // read-the-body hold: clearly UNDER the band, near its lower edge
-export const JK_FINALE_START = 47 // where the live leak begins to fall from
-export const JK_FLOOR = 38 // component loss trip (invisible on torso; engine auto-trip OFF for play2)
-export const JK_DRAIN_TARGET = 33 // drive target UNDER the floor — guarantees the fall reaches JK_FLOOR
-export const JK_PRO_MIN = 45 // pro half-star: the Spiegel never dipped below this in the finale
-export const JK_TICK_INDUCER = 5 // a LATE-day inducer tick (>=4 so it is visible on the slow pump)
-export const JK_TICK_DELAY = 0 // the Dienstag delay is a TRUE NO-MOVE (driveTo NOT called); MUST-FIX #1
-export const JK_TICK_PENALTY = 4 // read-the-body / mechanism stumble tick (visible, clamps > JK_FLOOR)
-export const JK_BAIT_BURST = 7 // finale bait downward burst (clamped >= JK_DRAIN_TARGET)
+export const JK_LEAK_LEVEL = 49 // „eine Woche später": the protection has leaked to just UNDER the band
+export const JK_FINALE_START = JK_LEAK_LEVEL // the live finale fall resumes from where the week left it (49)
+export const JK_FLOOR = 38 // the torso bottoms out near here as the clock runs out (down-only marker)
+export const JK_DRAIN_TARGET = 33 // visual drain target for the finale fall (under the band)
+export const JK_PRO_MIN = 43 // „pro" fast-save half-star: the Spiegel never dipped below this before the rescue
+export const JK_BAIT_BURST = 6 // finale bait downward lurch (clamped >= JK_DRAIN_TARGET)
 
-// ── dose-fill „Wusstest du?" rotation (young/adult via t()) ────────────────────
-export const JK_FACTS = ['jk.fact.disease', 'jk.fact.drug', 'jk.fact.window', 'jk.fact.timing']
+// pacing. The finale is a RACE: a visible countdown (JK_FINALE_SECONDS) is the deadline, the torso
+// drains the whole time, and it is only rescued once BOTH fixes are in. A bait burns time + lurches.
+export const JK_LEAK_RATE = 1.6 // the „eine Woche später" reveal fall (62 → 49): visible but unhurried
+export const JK_FINALE_RATE = 0.9 // the live finale drain (49 → 33): visibly falling under the countdown
+export const JK_RESCUE_RATE = 5 // the rescue rise back into the green once BOTH fixes are in
+export const JK_FINALE_SECONDS = 12 // the on-screen countdown — run out before both fixes → Abstoßung
+export const JK_BAIT_TIME_COST = 3 // a tempting wrong fix burns this many seconds off the clock
 
-// ── the fixed week the player investigates (history, NOT authored) ─────────────
-export type JkCardKind = 'known' | 'herb' | 'routine' | 'symptom'
-export interface JkWeekCard {
+// ── dose-fill „Wusstest du?" rotation (young/adult via t()) ─────────────────────
+export const JK_FACTS = ['jk.fact.disease', 'jk.fact.drug', 'jk.fact.window', 'jk.fact.monitor']
+
+// ── investigation: Frau Bergers neue Tees this week (magnifier reveal) ──────────
+// All four look like harmless „natural" teas; only Johanniskraut is the CYP3A4/P-gp
+// inducer. The lesson is exactly „pflanzlich ≠ harmlos — du musst jeden EINZELN prüfen".
+export interface JkItem {
   id: string
-  labelKey: string
-  detailKey: string
-  icon: string
-  kind: JkCardKind // 'herb' = an inducer (the culprit class); everything else is innocent
+  labelKey: string // the everyday name on the shelf („Stimmungstee")
+  revealKey: string // the magnifier ID line (real plant + what it does)
+  img: string // /johanniskraut/<id>.jpg (Wikimedia photo; emoji fallback in the component)
+  emoji: string // graceful fallback / chip while the photo loads
+  culprit: boolean // true = the inducer (Johanniskraut)
 }
-export interface JkWeekDay {
-  id: string
-  shortKey: string // 'jk.day.mo' … flat label, NO height
-  titleKey: string
-  noteKey: string
-  level: number // the baseline-carry target after this day (drifts down only; > JK_FLOOR)
-  inducerTick: number // Di = JK_TICK_DELAY (0 → no-move delay); Mi/Fr = JK_TICK_INDUCER (5)
-  cards: JkWeekCard[]
-}
-export const JK_WEEK_DAYS: JkWeekDay[] = [
-  { id: 'mo', shortKey: 'jk.day.mo', titleKey: 'jk.week.mo.title', noteKey: 'jk.week.mo.note', level: 62, inducerTick: 0, cards: [
-    { id: 'ciclosporin', labelKey: 'jk.card.ciclosporin', detailKey: 'jk.card.ciclosporin.detail', icon: '💊', kind: 'known' },
-    { id: 'breakfast', labelKey: 'jk.card.breakfast', detailKey: 'jk.card.breakfast.detail', icon: '🥐', kind: 'routine' },
-  ] },
-  { id: 'di', shortKey: 'jk.day.di', titleKey: 'jk.week.di.title', noteKey: 'jk.week.di.note', level: 62, inducerTick: JK_TICK_DELAY, cards: [
-    { id: 'tea', labelKey: 'jk.card.tea', detailKey: 'jk.card.tea.detail', icon: '🍵', kind: 'herb' },
-    { id: 'water', labelKey: 'jk.card.water', detailKey: 'jk.card.water.detail', icon: '💧', kind: 'routine' },
-  ] },
-  { id: 'mi', shortKey: 'jk.day.mi', titleKey: 'jk.week.mi.title', noteKey: 'jk.week.mi.note', level: 57, inducerTick: JK_TICK_INDUCER, cards: [
-    { id: 'caps', labelKey: 'jk.card.caps', detailKey: 'jk.card.caps.detail', icon: '💊', kind: 'herb' },
-    { id: 'camomile', labelKey: 'jk.card.camomile', detailKey: 'jk.card.camomile.detail', icon: '🌼', kind: 'routine' },
-  ] },
-  { id: 'do', shortKey: 'jk.day.do', titleKey: 'jk.week.do.title', noteKey: 'jk.week.do.note', level: 54, inducerTick: 0, cards: [
-    { id: 'walk', labelKey: 'jk.card.walk', detailKey: 'jk.card.walk.detail', icon: '🚶', kind: 'routine' },
-    { id: 'apple', labelKey: 'jk.card.apple', detailKey: 'jk.card.apple.detail', icon: '🍎', kind: 'routine' },
-  ] },
-  { id: 'fr', shortKey: 'jk.day.fr', titleKey: 'jk.week.fr.title', noteKey: 'jk.week.fr.note', level: 51, inducerTick: JK_TICK_INDUCER, cards: [
-    { id: 'teaRepeat', labelKey: 'jk.card.teaRepeat', detailKey: 'jk.card.teaRepeat.detail', icon: '🍵', kind: 'herb' },
-    { id: 'sleep', labelKey: 'jk.card.sleep', detailKey: 'jk.card.sleep.detail', icon: '😴', kind: 'symptom' },
-  ] },
-  { id: 'sa', shortKey: 'jk.day.sa', titleKey: 'jk.week.sa.title', noteKey: 'jk.week.sa.note', level: 50, inducerTick: 0, cards: [
-    { id: 'food', labelKey: 'jk.card.food', detailKey: 'jk.card.food.detail', icon: '🥗', kind: 'routine' },
-    { id: 'mask', labelKey: 'jk.card.mask', detailKey: 'jk.card.mask.detail', icon: '🌙', kind: 'routine' },
-  ] },
-  { id: 'so', shortKey: 'jk.day.so', titleKey: 'jk.week.so.title', noteKey: 'jk.week.so.note', level: 50, inducerTick: 0, cards: [
-    { id: 'low', labelKey: 'jk.card.low', detailKey: 'jk.card.low.detail', icon: '📉', kind: 'symptom' },
-    { id: 'ciclosporinSame', labelKey: 'jk.card.ciclosporinSame', detailKey: 'jk.card.ciclosporinSame.detail', icon: '💊', kind: 'known' },
-  ] },
+export const JK_ITEMS: JkItem[] = [
+  { id: 'johanniskraut', labelKey: 'jk.item.tea', revealKey: 'jk.reveal.tea', img: '/johanniskraut/johanniskraut.jpg', emoji: '🌼', culprit: true },
+  { id: 'kamille', labelKey: 'jk.item.kamille', revealKey: 'jk.reveal.kamille', img: '/johanniskraut/kamille.jpg', emoji: '🌼', culprit: false },
+  { id: 'pfefferminze', labelKey: 'jk.item.pfeff', revealKey: 'jk.reveal.pfeff', img: '/johanniskraut/pfefferminze.jpg', emoji: '🌿', culprit: false },
+  { id: 'ingwer', labelKey: 'jk.item.ingwer', revealKey: 'jk.reveal.ingwer', img: '/johanniskraut/ingwer.jpg', emoji: '🫚', culprit: false },
 ]
+export const JK_CULPRIT = 'johanniskraut'
 
-// ── finale actions: 3 real (cause + monitor + contact) + 3 baits ───────────────
-export type JkSlot = 'cause' | 'contact' | 'monitor'
+// ── finale actions: 2 mandatory (cause + contact) + 2 baits ──────────────────────
+export type JkSlot = 'cause' | 'contact'
 export interface JkFinaleAction {
   id: string
   labelKey: string
   feedbackKey: string
-  kind: 'mandatory' | 'bonus' | 'bait'
-  slot?: JkSlot // 'cause'+'contact' = MANDATORY to win; 'monitor' = bonus
+  kind: 'mandatory' | 'bait'
+  slot?: JkSlot // 'cause'+'contact' = both MANDATORY to win
 }
 export const JK_FINALE_ACTIONS: JkFinaleAction[] = [
   { id: 'absetzen', labelKey: 'jk.act.absetzen', feedbackKey: 'jk.fb.absetzen', kind: 'mandatory', slot: 'cause' },
   { id: 'fachstelle', labelKey: 'jk.act.fachstelle', feedbackKey: 'jk.fb.fachstelle', kind: 'mandatory', slot: 'contact' },
-  { id: 'spiegel', labelKey: 'jk.act.spiegel', feedbackKey: 'jk.fb.spiegel', kind: 'bonus', slot: 'monitor' },
-  { id: 'tee', labelKey: 'jk.act.tee', feedbackKey: 'jk.fb.tee', kind: 'bait' },
   { id: 'verdoppeln', labelKey: 'jk.act.verdoppeln', feedbackKey: 'jk.fb.verdoppeln', kind: 'bait' },
   { id: 'naturmittel', labelKey: 'jk.act.naturmittel', feedbackKey: 'jk.fb.naturmittel', kind: 'bait' },
 ]
 export const JK_MANDATORY = JK_FINALE_ACTIONS.filter((a) => a.kind === 'mandatory').map((a) => a.id) // ['absetzen','fachstelle']
-/** the rescue arms ONLY when BOTH mandatory actions are applied (the leak keeps falling until then). */
+/** The rescue arms only when BOTH mandatory actions are applied (stop the cause AND involve
+ *  the clinic) — stopping just one keeps the protection leaking. */
 export function jkArmsRescue(applied: string[]): boolean {
   return JK_MANDATORY.every((id) => applied.includes(id))
 }
 
-// ── back-dating: the correct day is Dienstag, the visible-crash decoy is Sonntag ─
-export const JK_CAUSE_DAY = 'di'
-export const JK_DECOY_DAY = 'so'
-// the mechanism leiste only exposes the days the player placed a card on + the decoy,
-// so back-dating is an inference (quiet tea-day vs loud crash-day), not a 7-day sweep.
-export const JK_MECH_CANDIDATES = ['di', 'mi', 'fr', 'so'] // cause + late inducers + decoy
-
-// ── scoring helpers (headless-pure; the component derives win/clever/pro inputs) ─
-/** clever (0/0.5/1): (a) found a herb with <=1 false flag in the week; (b) read-the-body AND
- *  back-date both first-try clean. Each worth 0.5. */
-export function jkClever(herbTaken: number, falseFlags: number, readClean: boolean, mechClean: boolean): number {
-  const detective = herbTaken > 0 && falseFlags <= 1 ? 0.5 : 0
-  const backdate = readClean && mechClean ? 0.5 : 0
-  return detective + backdate
+// ── scoring helpers (headless-pure; the component derives the inputs) ───────────
+/** clever (0/0.5/1) = the investigation: how cleanly the player accused the culprit.
+ *  0 wrong accusations → 1, exactly 1 → 0.5, 2+ → 0. (Mirrors Frühstücks wrong-lift grade.) */
+export function jkClever(wrongAccuse: number): number {
+  return wrongAccuse === 0 ? 1 : wrongAccuse === 1 ? 0.5 : 0
 }
-/** pro (0/0.5/1): (a) the bonus leak (Talspiegel) also stopped; (b) zero baits AND minLevel >= JK_PRO_MIN. */
-export function jkPro(monitorStopped: boolean, baitCount: number, minLevel: number): number {
-  return (monitorStopped ? 0.5 : 0) + (baitCount === 0 && minLevel >= JK_PRO_MIN ? 0.5 : 0)
+/** pro (0/0.5/1) = the finale race: (a) pulled zero baits; (b) saved fast — the Spiegel never
+ *  dipped below JK_PRO_MIN before the rescue. */
+export function jkPro(baitCount: number, minLevel: number): number {
+  return (baitCount === 0 ? 0.5 : 0) + (minLevel >= JK_PRO_MIN ? 0.5 : 0)
 }
 
 // (the `Outcome` import documents the down-only win/under model used by the component + sim)

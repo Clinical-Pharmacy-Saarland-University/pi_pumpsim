@@ -1,4 +1,34 @@
-# Der Wochen-Pillenplan: Halt den Rhythmus — Torso-first redesign
+> ## ⚠️ SUPERSEDED — see the 2026-06-12 rework note below
+>
+> The „compose-a-week / hand-crank" design specced in the rest of this file was
+> **scrapped** as incoherent/under-motivated (no context for the calendar, the „Tag drehen"
+> verb, or the consequences). Story 6 was **reworked into a guided teaching arc around an
+> antibiotic course** (id stays `adherence`; component still `WochePlay.svelte`):
+>
+> **Patient** Jonas, 16 · bakterielle Mandelentzündung · Penicillin (7-Tage-Kur). The torso
+> window gains a vivid meaning: **green band = wirksam** (genug, um die Bakterien zu töten),
+> **below = unter der „Kill-Line" (MHK)** → die zähesten überleben & werden resistent,
+> **above = zu viel → Nebenwirkungen**.
+>
+> **Arc (6 progress steps):** briefing (legend of the three zones) → **accumulate** to steady
+> state (tap a dose/day; the curve climbs into the band, bacteria die off) → **Q1** (why daily,
+> not all at once) → **skipped dose** drops below the kill line (survivors hang on) → **Q2** (what
+> to do) → demo **„nachholen"-double** overshoots above the band, then the correct single dose
+> heals → demo **stop-early → RESISTANCE bloom** (the survivors multiply, the petri glows red) →
+> **Q3** (why early-stopping is dangerous) → **finish the course** → all bacteria cleared → win.
+>
+> Always reaches a teaching win; the **stars grade the 3 questions** (clever = Q1, pro = Q2+Q3,
+> via `adhCleverGrade`/`adhProGrade`). On-screen aids that mirror the body: a **PK curve**
+> (band + kill line + too-much line) and a **bacteria petri**. Every move is hand-triggered and
+> motivated by a „why"; every beat sends the eyes to the body („Schau auf den Körper").
+>
+> Files: `stories/adherence.ts` (model/tracks/questions/scoring, pure + `sim/adherence.sim.ts`),
+> `stories/adherence.locale.ts` (DE young + `.adult`), `screens/WochePlay.svelte`. Verified via
+> the headless sim, `svelte-check`, and a full Playwright walk-through (2026-06-12).
+>
+> ---
+
+# Der Wochen-Pillenplan: Halt den Rhythmus — Torso-first redesign  _(SUPERSEDED — historical)_
 
 _Story id: `adherence`_
 
