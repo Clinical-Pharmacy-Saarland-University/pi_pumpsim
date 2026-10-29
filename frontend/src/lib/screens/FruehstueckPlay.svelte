@@ -363,7 +363,7 @@
                     disabled={pumping || assayConfirmed}
                     onclick={() => toggleFruit(f.id)}
                   >
-                    <img src={f.img} alt={t(f.labelKey)} />
+                    <img src={import.meta.env.BASE_URL + f.img} alt={t(f.labelKey)} />
                     <span class="name">{t(f.labelKey)}</span>
                     {#if selected.has(f.id) && !assayConfirmed}<span class="pick">✓</span>{/if}
                     {#if assayConfirmed}<span class="mark {fruitRight(f) ? 'ok' : 'no'}">{fruitRight(f) ? '✓' : '✗'}</span>{/if}

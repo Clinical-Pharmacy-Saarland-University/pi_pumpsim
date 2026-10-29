@@ -6,11 +6,13 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 //
 // Web demo (`--mode web`, or VITE_TWIN=browser): the torso twin runs in the page
 // (src/lib/twin.ts) instead of the backend, so the build is plain static files in
-// dist-web/ — kept apart from dist/, which the Pi backend serves.
+// dist-web/ — kept apart from dist/, which the Pi backend serves. A relative base
+// lets that bundle run from any path (e.g. GitHub Pages under /pi_pumpsim/).
 export default defineConfig(({ mode }) => {
   const web = mode === 'web' || loadEnv(mode, '.').VITE_TWIN === 'browser'
   return {
     plugins: [svelte()],
+    base: web ? './' : '/',
     define: web ? { 'import.meta.env.VITE_TWIN': JSON.stringify('browser') } : {},
     build: web ? { outDir: 'dist-web' } : {},
     server: {

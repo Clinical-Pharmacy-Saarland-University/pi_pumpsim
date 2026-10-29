@@ -56,6 +56,7 @@ export const FR_OPTIONS: FrOption[] = [
 export const FR_LOWER_WOBBLE = [58, 67, 54]
 
 // --- furanocoumarin assay: reuse the bundled fruit photos (public/fruits/) ---
+// img paths are relative to public/; the component prefixes the build's BASE_URL
 export interface FrFruit {
   id: string
   img: string
@@ -63,12 +64,12 @@ export interface FrFruit {
   inhibits: boolean // contains furanocoumarins (grapefruit/pomelo/bitter orange)
 }
 export const FR_FRUITS: FrFruit[] = [
-  { id: 'grapefruit', img: '/fruits/grapefruit.jpg', labelKey: 'fruit.grapefruit', inhibits: true },
-  { id: 'pomelo', img: '/fruits/pomelo.jpg', labelKey: 'fruit.pomelo', inhibits: true },
-  { id: 'bitterorange', img: '/fruits/bitterorange.jpg', labelKey: 'fruit.bitterorange', inhibits: true },
-  { id: 'orange', img: '/fruits/orange.jpg', labelKey: 'fruit.orange', inhibits: false },
-  { id: 'mandarine', img: '/fruits/mandarine.jpg', labelKey: 'fruit.mandarine', inhibits: false },
-  { id: 'zitrone', img: '/fruits/zitrone.jpg', labelKey: 'fruit.zitrone', inhibits: false },
+  { id: 'grapefruit', img: 'fruits/grapefruit.jpg', labelKey: 'fruit.grapefruit', inhibits: true },
+  { id: 'pomelo', img: 'fruits/pomelo.jpg', labelKey: 'fruit.pomelo', inhibits: true },
+  { id: 'bitterorange', img: 'fruits/bitterorange.jpg', labelKey: 'fruit.bitterorange', inhibits: true },
+  { id: 'orange', img: 'fruits/orange.jpg', labelKey: 'fruit.orange', inhibits: false },
+  { id: 'mandarine', img: 'fruits/mandarine.jpg', labelKey: 'fruit.mandarine', inhibits: false },
+  { id: 'zitrone', img: 'fruits/zitrone.jpg', labelKey: 'fruit.zitrone', inhibits: false },
 ]
 
 /** assay grade for the „pro" half-star: perfect = 1, one wrong = 0.5, two+ = 0. */
