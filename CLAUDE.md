@@ -116,6 +116,7 @@ frontend/                   Vite + Svelte 5 (runes) + TS
   src/lib/screens/          Start, StorySelect, Briefing, Play, {Ddi,Organ,Gene,Woche,Jk}Play,
                             Outcome, Resetting, Admin, CalibWizard
 deploy/                     Pi kiosk: install.sh (+ pwm overlay/udev), update.sh, systemd units, sway config
+.github/workflows/web-demo.yml  web demo → GitHub Pages (builds always; deploys only once Pages is enabled)
 tools/pump_test.py          standalone IBT-2 pump bench (no project deps)
 docs/game-design.md         living design doc (§19); docs/stories/ specs + STATUS
 docs/calibration.md         pump + torso calibration protocol (run from the on-screen admin)

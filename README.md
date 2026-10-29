@@ -69,8 +69,14 @@ Admin, calibration and power controls are disabled.
 just build-web   # → frontend/dist-web  (= cd frontend; npm run build:web)
 just serve-web   # build + preview on http://localhost:4173
 ```
-`dist-web/` is plain static files: serve it from a web root (asset paths are absolute
-`/…`). The default `just build` (the Pi bundle in `dist/`) is unchanged.
+`dist-web/` is plain static files with relative paths, so it runs from any web path. The
+default `just build` (the Pi bundle in `dist/`) is unchanged.
+
+**GitHub Pages:** [`.github/workflows/web-demo.yml`](.github/workflows/web-demo.yml) builds the
+web demo on every push to `main` (and on PRs touching `frontend/`). It only deploys once Pages
+is switched on — *Settings → Pages → Source: GitHub Actions* — then the demo is public at
+`https://clinical-pharmacy-saarland-university.github.io/pi_pumpsim/` (re-run the workflow, or
+push to `main`, to publish).
 
 ## How it plays
 `Start (language + age) → StorySelect (6 cards) → Briefing → Dose → [Event → Wissensfrage
