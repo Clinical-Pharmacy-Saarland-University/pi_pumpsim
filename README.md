@@ -65,6 +65,8 @@ in-page TypeScript port ([`frontend/src/lib/twin.ts`](frontend/src/lib/twin.ts))
 on-screen torso beside the 1280×720 frame, both scaled to the window. The torso fills at the
 calibrated pump pace (`calibration.py` `DEFAULT`); the between-runs reset drains briskly.
 Admin, calibration and power controls are disabled.
+
+![Web demo: story 1 after the standard dose, the on-screen torso settled in the taped band](docs/web-demo.jpg)
 ```
 just build-web   # → frontend/dist-web  (= cd frontend; npm run build:web)
 just serve-web   # build + preview on http://localhost:4173
