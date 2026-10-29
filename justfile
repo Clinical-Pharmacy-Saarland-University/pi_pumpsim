@@ -45,9 +45,18 @@ build:
 serve: build
     cd backend; ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
 
+# build the browser-only web demo (in-page torso twin, no backend/pump) → frontend/dist-web
+build-web:
+    cd frontend; npm run build:web
+
+# build the web demo, then preview the static bundle on :4173
+serve-web: build-web
+    cd frontend; npm run preview:web
+
 # remove build artifacts + python caches
 clean:
     if (Test-Path frontend/dist) { Remove-Item -Recurse -Force frontend/dist }
+    if (Test-Path frontend/dist-web) { Remove-Item -Recurse -Force frontend/dist-web }
     Get-ChildItem backend/app, backend/tests -Recurse -Directory -Filter __pycache__ -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
     if (Test-Path backend/.pytest_cache) { Remove-Item -Recurse -Force backend/.pytest_cache }
 

@@ -122,8 +122,10 @@
     background: linear-gradient(0deg, rgba(255, 183, 3, 0.12), transparent);
   }
 
+  /* the band + red lines are tape on the OUTSIDE of the torso: draw them over the water */
   .band {
     position: absolute;
+    z-index: 1;
     left: 0;
     right: 0;
     background: var(--green-soft);
@@ -143,6 +145,7 @@
   }
   .crit {
     position: absolute;
+    z-index: 1;
     left: 0;
     right: 0;
     height: 2px;
@@ -161,6 +164,7 @@
     background: linear-gradient(180deg, var(--water-top), var(--water-bot));
     box-shadow: 0 0 30px color-mix(in srgb, var(--accent) 45%, transparent);
     transition: height 0.12s linear, box-shadow 0.4s ease;
+    overflow: hidden; /* keep the slosh + bubbles inside the water, so the surface reads true */
   }
   .surface {
     position: absolute;

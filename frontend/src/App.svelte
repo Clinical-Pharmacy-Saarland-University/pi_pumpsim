@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { game, init } from './lib/game.svelte'
+  import { WEB_DEMO } from './lib/api'
   import { i18n } from './lib/locale.svelte'
   import Start from './lib/screens/Start.svelte'
   import StorySelect from './lib/screens/StorySelect.svelte'
@@ -13,28 +14,43 @@
   import Resetting from './lib/screens/Resetting.svelte'
   import Admin from './lib/screens/Admin.svelte'
   import VirtualTorso from './lib/VirtualTorso.svelte'
+  import Torso from './lib/Torso.svelte'
 
   let showAdmin = $state(false)
+  // the web demo has no pump/Pi behind it: admin, calibration and power controls stay shut
+  const openAdmin = () => {
+    if (!WEB_DEMO) showAdmin = true
+  }
   // boot warning: nag once per boot, on the Start screen, if the torso isn't
   // initialised (not homed) — with a big jump to the admin Setup page. Cleared by
   // initialising (homed) or dismissing.
   let bootAck = $state(false)
   let needInit = $derived(
-    !showAdmin && game.phase === 'start' && !!game.level && !game.level.homed && !bootAck,
+    !WEB_DEMO && !showAdmin && game.phase === 'start' && !!game.level && !game.level.homed && !bootAck,
   )
   let scale = $state(1)
   let vw = $state(1280)
   let vh = $state(720)
-  let framed = $derived(!(vw === 1280 && vh === 720))
+  let framed = $derived(WEB_DEMO || !(vw === 1280 && vh === 720))
+  // dev chrome (Pi label + virtual-torso panel) is for the dev PC, not the web demo
+  let devChrome = $derived(framed && !WEB_DEMO)
   // Arabic reads right-to-left; flip the whole game frame for the ar locale.
   let dir = $derived<'ltr' | 'rtl'>(i18n.locale === 'ar' ? 'rtl' : 'ltr')
 
   // dev chrome around the Pi frame: the virtual-torso panel + its gap
   const TWIN_W = 300 + 28
+  // web demo: no physical torso stands beside the screen, so the on-screen Torso does —
+  // a column this wide (in frame px) next to the frame, scaled together with it
+  const WEB_TORSO_W = 280
 
   function fit() {
     vw = window.innerWidth
     vh = window.innerHeight
+    if (WEB_DEMO) {
+      // web demo: bezelled frame + torso column, scaled (up or down) to fill the window
+      scale = Math.max(0.2, Math.min((vw - 64 - 28) / (1280 + WEB_TORSO_W), (vh - 64) / 720))
+      return
+    }
     if (vw === 1280 && vh === 720) {
       scale = 1 // the real Pi screen: exact fit, no dev chrome
       return
@@ -59,7 +75,7 @@
       showAdmin = false
       return
     }
-    if (e.key.toLowerCase() === 'a') showAdmin = !showAdmin
+    if (e.key.toLowerCase() === 'a') showAdmin = !showAdmin && !WEB_DEMO
   }
 </script>
 
@@ -67,7 +83,7 @@
 
 <div class="device">
   <div class="stage">
-  {#if framed}<div class="label">Raspberry Pi · Touch Display 2 · 1280 × 720</div>{/if}
+  {#if devChrome}<div class="label">Raspberry Pi · Touch Display 2 · 1280 × 720</div>{/if}
   <!-- .fit reserves the SCALED footprint so the twin panel can sit beside the frame;
        no transform at 1:1 (Pi): a scaled/transformed container can offset touch
        hit-testing; only scale in the dev frame where scale < 1 -->
@@ -78,7 +94,7 @@
            stops (it's a big GPU drain on the Pi → draggy scroll / laggy taps) -->
       <Admin onclose={() => (showAdmin = false)} />
     {:else if game.phase === 'start'}
-      <Start onadmin={() => (showAdmin = true)} />
+      <Start onadmin={openAdmin} />
     {:else if game.phase === 'storyselect'}
       <StorySelect />
     {:else if game.phase === 'resetting'}
@@ -105,7 +121,7 @@
             The torso state is unknown — it may still hold water from before. Initialize it before
             the first game so the level is correct.
           </p>
-          <button class="go" onclick={() => { showAdmin = true; bootAck = true }}>
+          <button class="go" onclick={() => { openAdmin(); bootAck = true }}>
             ⚙ Open Setup &amp; initialize
           </button>
           <button class="later" onclick={() => (bootAck = true)}>Dismiss</button>
@@ -115,15 +131,33 @@
   </div>
   </div>
   </div>
-  {#if framed}
+  {#if devChrome}
     <!-- dev-only: the virtual twin of the physical torso, outside the Pi frame -->
     <aside class="twin-panel">
       <VirtualTorso s={game.level} connected={game.connected} />
     </aside>
   {/if}
+  {#if WEB_DEMO && game.level}
+    <!-- web demo: the on-screen torso stands where the physical one would -->
+    <aside class="web-torso" style={`width:${WEB_TORSO_W * scale}px; height:${720 * scale}px`}>
+      <div class="web-torso-inner" style={`width:${WEB_TORSO_W}px; transform: scale(${scale})`}>
+        <Torso s={game.level} />
+      </div>
+    </aside>
+  {/if}
 </div>
 
 <style>
+  .web-torso {
+    flex: none;
+  }
+  .web-torso-inner {
+    height: 720px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: top left;
+  }
   /* boot warning: shown over the Start screen until the torso is initialised */
   .bootwarn {
     position: absolute;

@@ -59,6 +59,27 @@ just build     # production UI bundle
 panel beside the 1280×720 dev frame shows the physical twin in ml (ruler, taped band, live
 flow) — the whole game runs without hardware.
 
+## Web demo (browser only — no Pi, no pump, no backend)
+The same game as a static web app: `VITE_TWIN=browser` swaps the FastAPI torso twin for an
+in-page TypeScript port ([`frontend/src/lib/twin.ts`](frontend/src/lib/twin.ts)) and shows an
+on-screen torso beside the 1280×720 frame, both scaled to the window. The torso fills at the
+calibrated pump pace (`calibration.py` `DEFAULT`); the between-runs reset drains briskly.
+Admin, calibration and power controls are disabled.
+
+![Web demo: story 1 after the standard dose, the on-screen torso settled in the taped band](docs/web-demo.jpg)
+```
+just build-web   # → frontend/dist-web  (= cd frontend; npm run build:web)
+just serve-web   # build + preview on http://localhost:4173
+```
+`dist-web/` is plain static files with relative paths, so it runs from any web path. The
+default `just build` (the Pi bundle in `dist/`) is unchanged.
+
+**GitHub Pages:** [`.github/workflows/web-demo.yml`](.github/workflows/web-demo.yml) builds the
+web demo on every push to `main` (and on PRs touching `frontend/`). It only deploys once Pages
+is switched on — *Settings → Pages → Source: GitHub Actions* — then the demo is public at
+`https://clinical-pharmacy-saarland-university.github.io/pi_pumpsim/` (re-run the workflow, or
+push to `main`, to publish).
+
 ## How it plays
 `Start (language + age) → StorySelect (6 cards) → Briefing → Dose → [Event → Wissensfrage
 → slow drift → Decision]* → Outcome (win / lose + stars) → reset`. The level sits in a

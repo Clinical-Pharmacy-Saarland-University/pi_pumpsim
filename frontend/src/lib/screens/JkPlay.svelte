@@ -274,7 +274,7 @@
                   >
                     <span class="thumb">
                       {#if isRev && !imgFailed.has(item.id)}
-                        <img src={item.img} alt="" onerror={() => (imgFailed = new Set(imgFailed).add(item.id))} />
+                        <img src={import.meta.env.BASE_URL + item.img} alt="" onerror={() => (imgFailed = new Set(imgFailed).add(item.id))} />
                       {:else}
                         <span class="emoji">{item.emoji}</span>
                       {/if}

@@ -34,7 +34,7 @@ ok('no level is ever above the band (down-only)', [JK_BASELINE, JK_DOSE, JK_LEAK
 ok('four investigation items', JK_ITEMS.length === 4)
 ok('exactly one culprit', JK_ITEMS.filter((i) => i.culprit).length === 1)
 ok('the culprit id === JK_CULPRIT (johanniskraut)', JK_ITEMS.find((i) => i.culprit)!.id === JK_CULPRIT && JK_CULPRIT === 'johanniskraut')
-ok('every item has a photo under /johanniskraut/, a label + a reveal key', JK_ITEMS.every((i) => i.img.startsWith('/johanniskraut/') && !!i.labelKey && !!i.revealKey && !!i.emoji))
+ok('every item has a photo under johanniskraut/, a label + a reveal key', JK_ITEMS.every((i) => i.img.startsWith('johanniskraut/') && !!i.labelKey && !!i.revealKey && !!i.emoji))
 ok('item ids are unique', new Set(JK_ITEMS.map((i) => i.id)).size === JK_ITEMS.length)
 
 // --- finale actions ---

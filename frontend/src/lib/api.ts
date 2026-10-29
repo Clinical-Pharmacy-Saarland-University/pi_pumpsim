@@ -1,10 +1,22 @@
 import type { LevelState } from './types'
+import { BrowserTwin, runTwin } from './twin'
+
+/** Web demo build (VITE_TWIN=browser, `npm run build:web`): no backend — the torso twin
+ *  runs in the page and the level commands below are answered locally. Constant-folded
+ *  by Vite, so the default (Pi/dev) build keeps the WebSocket/REST path only. */
+export const WEB_DEMO = import.meta.env.VITE_TWIN === 'browser'
+const twin = WEB_DEMO ? new BrowserTwin() : null
+const local = <T>(fn: () => T): Promise<T> => Promise.resolve(fn())
 
 /** Subscribe to live level state over WebSocket. Auto-reconnects. */
 export function connectLevel(
   onMessage: (s: LevelState) => void,
   onStatus?: (connected: boolean) => void,
 ): () => void {
+  if (twin) {
+    onStatus?.(true)
+    return runTwin(twin, onMessage)
+  }
   let ws: WebSocket | null = null
   let closed = false
   let retry: ReturnType<typeof setTimeout> | null = null
@@ -83,11 +95,13 @@ export interface PreparePlan {
 
 export const api = {
   /** Tell the torso to move toward `level` (0–100), optionally at a custom rate. */
-  setTarget: (level: number, rate?: number) => post('/api/level/target', { level, rate }),
-  reset: () => post('/api/level/reset'),
+  setTarget: (level: number, rate?: number) =>
+    twin ? local(() => twin.setTarget(level, rate)) : post('/api/level/target', { level, rate }),
+  reset: () => (twin ? local(() => twin.reset()) : post('/api/level/reset')),
   /** Between-runs re-home: drains only the known end-of-run volume when homed (fast),
    *  primes to baseline, snaps the twin. Returns the plan (incl. eta_s for the countdown). */
-  prepare: () => post('/api/level/prepare') as Promise<PreparePlan>,
+  prepare: () =>
+    (twin ? local(() => twin.prepare()) : post('/api/level/prepare')) as Promise<PreparePlan>,
 
   /** Direct pump control for the admin/calibration screen. speed is 0..1. */
   admin: {

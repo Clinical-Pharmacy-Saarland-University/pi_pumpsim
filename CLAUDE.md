@@ -106,13 +106,17 @@ frontend/                   Vite + Svelte 5 (runes) + TS
   src/lib/locale.svelte.ts  i18n: t() with German fallback; all UI strings  ★ (edit copy here)
   src/lib/events.ts         event pool (grapefruit, apfel) + dose levels
   src/lib/stories.ts        the 6 story cards     ·  src/lib/flow.ts  shared v2 flow logic
-  src/lib/api.ts            WS connect + setTarget/reset + admin/* (pump, calibration)
+  src/lib/api.ts            WS connect + setTarget/reset + admin/* (pump, calibration);
+                            web demo (VITE_TWIN=browser) answers them from lib/twin.ts
+  src/lib/twin.ts           in-browser torso twin for the web demo (port of controller + runner
+                            pacing; tested via sim/twin.sim.ts)
   src/lib/calib.ts          pure calibration math + types (tested via sim/calib.sim.ts)
   src/lib/NumPad.svelte     on-screen numeric keypad (the kiosk has no OS keyboard)
   src/lib/VirtualTorso.svelte  dev-only ml twin of the physical torso (outside the Pi frame)
   src/lib/screens/          Start, StorySelect, Briefing, Play, {Ddi,Organ,Gene,Woche,Jk}Play,
                             Outcome, Resetting, Admin, CalibWizard
 deploy/                     Pi kiosk: install.sh (+ pwm overlay/udev), update.sh, systemd units, sway config
+.github/workflows/web-demo.yml  web demo → GitHub Pages (builds always; deploys only once Pages is enabled)
 tools/pump_test.py          standalone IBT-2 pump bench (no project deps)
 docs/game-design.md         living design doc (§19); docs/stories/ specs + STATUS
 docs/calibration.md         pump + torso calibration protocol (run from the on-screen admin)
@@ -130,6 +134,7 @@ just down      # kill stray dev servers (8000/5173)
 just test      # backend pytest
 just check     # svelte-check (frontend type-check)
 just build     # build the UI bundle (backend serves frontend/dist in prod)
+just build-web # browser-only web demo (in-page twin, no backend) → frontend/dist-web
 just tag 0.0.1-alpha  # write VERSION, commit, annotated tag v0.0.1-alpha + push
 ```
 

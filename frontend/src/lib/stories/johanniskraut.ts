@@ -34,15 +34,16 @@ export interface JkItem {
   id: string
   labelKey: string // the everyday name on the shelf („Stimmungstee")
   revealKey: string // the magnifier ID line (real plant + what it does)
-  img: string // /johanniskraut/<id>.jpg (Wikimedia photo; emoji fallback in the component)
+  img: string // johanniskraut/<id>.jpg under public/ (Wikimedia photo; the component prefixes
+  // BASE_URL and falls back to the emoji)
   emoji: string // graceful fallback / chip while the photo loads
   culprit: boolean // true = the inducer (Johanniskraut)
 }
 export const JK_ITEMS: JkItem[] = [
-  { id: 'johanniskraut', labelKey: 'jk.item.tea', revealKey: 'jk.reveal.tea', img: '/johanniskraut/johanniskraut.jpg', emoji: '🌼', culprit: true },
-  { id: 'kamille', labelKey: 'jk.item.kamille', revealKey: 'jk.reveal.kamille', img: '/johanniskraut/kamille.jpg', emoji: '🌼', culprit: false },
-  { id: 'pfefferminze', labelKey: 'jk.item.pfeff', revealKey: 'jk.reveal.pfeff', img: '/johanniskraut/pfefferminze.jpg', emoji: '🌿', culprit: false },
-  { id: 'ingwer', labelKey: 'jk.item.ingwer', revealKey: 'jk.reveal.ingwer', img: '/johanniskraut/ingwer.jpg', emoji: '🫚', culprit: false },
+  { id: 'johanniskraut', labelKey: 'jk.item.tea', revealKey: 'jk.reveal.tea', img: 'johanniskraut/johanniskraut.jpg', emoji: '🌼', culprit: true },
+  { id: 'kamille', labelKey: 'jk.item.kamille', revealKey: 'jk.reveal.kamille', img: 'johanniskraut/kamille.jpg', emoji: '🌼', culprit: false },
+  { id: 'pfefferminze', labelKey: 'jk.item.pfeff', revealKey: 'jk.reveal.pfeff', img: 'johanniskraut/pfefferminze.jpg', emoji: '🌿', culprit: false },
+  { id: 'ingwer', labelKey: 'jk.item.ingwer', revealKey: 'jk.reveal.ingwer', img: 'johanniskraut/ingwer.jpg', emoji: '🫚', culprit: false },
 ]
 export const JK_CULPRIT = 'johanniskraut'
 
