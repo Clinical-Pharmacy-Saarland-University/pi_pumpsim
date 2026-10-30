@@ -64,9 +64,14 @@ The same game as a static web app: `VITE_TWIN=browser` swaps the FastAPI torso t
 in-page TypeScript port ([`frontend/src/lib/twin.ts`](frontend/src/lib/twin.ts)) and shows an
 on-screen torso beside the 1280×720 frame, both scaled to the window. The torso fills at the
 calibrated pump pace (`calibration.py` `DEFAULT`); the between-runs reset drains briskly.
-Admin, calibration and power controls are disabled.
+The capsule has a face that reacts to its level (sleepy → hopeful → happy in the band →
+worried → dizzy past the red line). A footer links SafePolyMed and opens the **Impressum** and
+**Datenschutzerklärung** ([`frontend/src/lib/legal.ts`](frontend/src/lib/legal.ts), adapted
+from the department's `apptemplate`; German is authoritative). Admin, calibration and power
+controls are disabled.
 
 ![Web demo: story 1 after the standard dose, the on-screen torso settled in the taped band](docs/web-demo.jpg)
+![The capsule's moods: sleepy, hopeful, happy, worried, dizzy](docs/web-demo-moods.jpg)
 ```
 just build-web   # → frontend/dist-web  (= cd frontend; npm run build:web)
 just serve-web   # build + preview on http://localhost:4173

@@ -110,6 +110,8 @@ frontend/                   Vite + Svelte 5 (runes) + TS
                             web demo (VITE_TWIN=browser) answers them from lib/twin.ts
   src/lib/twin.ts           in-browser torso twin for the web demo (port of controller + runner
                             pacing; tested via sim/twin.sim.ts)
+  src/lib/legal.ts          web demo Impressum + Datenschutzerklärung (DE authoritative + EN),
+                            shown by LegalDialog.svelte from the web-demo footer
   src/lib/calib.ts          pure calibration math + types (tested via sim/calib.sim.ts)
   src/lib/NumPad.svelte     on-screen numeric keypad (the kiosk has no OS keyboard)
   src/lib/VirtualTorso.svelte  dev-only ml twin of the physical torso (outside the Pi frame)
