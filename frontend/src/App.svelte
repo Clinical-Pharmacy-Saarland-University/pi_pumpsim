@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { game, init } from './lib/game.svelte'
   import { WEB_DEMO } from './lib/api'
-  import { i18n } from './lib/locale.svelte'
+  import { i18n, t } from './lib/locale.svelte'
   import Start from './lib/screens/Start.svelte'
   import StorySelect from './lib/screens/StorySelect.svelte'
   import DdiPlay from './lib/screens/DdiPlay.svelte'
@@ -15,6 +15,7 @@
   import Admin from './lib/screens/Admin.svelte'
   import VirtualTorso from './lib/VirtualTorso.svelte'
   import Torso from './lib/Torso.svelte'
+  import LegalDialog from './lib/LegalDialog.svelte'
 
   let showAdmin = $state(false)
   // the web demo has no pump/Pi behind it: admin, calibration and power controls stay shut
@@ -42,13 +43,16 @@
   // web demo: no physical torso stands beside the screen, so the on-screen Torso does —
   // a column this wide (in frame px) next to the frame, scaled together with it
   const WEB_TORSO_W = 280
+  // web demo: a public site needs its Impressum / Datenschutzerklärung (the kiosk doesn't)
+  let legal = $state<'imprint' | 'privacy' | null>(null)
 
   function fit() {
     vw = window.innerWidth
     vh = window.innerHeight
     if (WEB_DEMO) {
-      // web demo: bezelled frame + torso column, scaled (up or down) to fill the window
-      scale = Math.max(0.2, Math.min((vw - 64 - 28) / (1280 + WEB_TORSO_W), (vh - 64) / 720))
+      // web demo: bezelled frame + torso column, scaled (up or down) to fill the window,
+      // leaving a strip at the bottom for the project / legal links
+      scale = Math.max(0.2, Math.min((vw - 64 - 28) / (1280 + WEB_TORSO_W), (vh - 88) / 720))
       return
     }
     if (vw === 1280 && vh === 720) {
@@ -145,11 +149,52 @@
       </div>
     </aside>
   {/if}
+  {#if WEB_DEMO}
+    <nav class="web-links" {dir}>
+      <span>
+        {t('web.project')}
+        <a href="https://safepolymed.eu" target="_blank" rel="noopener noreferrer">SafePolyMed ↗</a>
+      </span>
+      <span aria-hidden="true">·</span>
+      <span>{t('web.funded')}</span>
+      <span aria-hidden="true">·</span>
+      <button onclick={() => (legal = 'imprint')}>{t('web.imprint')}</button>
+      <span aria-hidden="true">·</span>
+      <button onclick={() => (legal = 'privacy')}>{t('web.privacy')}</button>
+    </nav>
+    {#if legal}<LegalDialog doc={legal} onclose={() => (legal = null)} />{/if}
+  {/if}
 </div>
 
 <style>
   .web-torso {
     flex: none;
+  }
+  .web-links {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px 10px;
+    padding: 0 16px;
+    font-size: 13px;
+    color: var(--dim);
+  }
+  .web-links a,
+  .web-links button {
+    color: var(--spm-cyan-bright);
+    background: none;
+    padding: 0;
+    font-size: inherit;
+    text-decoration: none;
+  }
+  .web-links a:hover,
+  .web-links button:hover {
+    text-decoration: underline;
   }
   .web-torso-inner {
     height: 720px;
