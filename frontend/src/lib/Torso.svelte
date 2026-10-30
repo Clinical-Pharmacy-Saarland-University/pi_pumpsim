@@ -33,6 +33,44 @@
     { x: 56, s: 5, d: 2.5, delay: 1.0 },
     { x: 70, s: 9, d: 3.6, delay: 2.1 },
   ]
+
+  // The capsule's face reacts to its own level: sleepy with too little drug, hopeful on
+  // the way up, happy in the band, worried above it, dizzy past the red line. The pupils
+  // follow the pump (up while filling, down while draining). Purely decorative.
+  type Mood = 'sleepy' | 'hopeful' | 'happy' | 'worried' | 'dizzy'
+  let mood = $derived<Mood>(
+    s.zone === 'critical_low'
+      ? 'sleepy'
+      : s.zone === 'under'
+        ? 'hopeful'
+        : s.zone === 'in'
+          ? 'happy'
+          : s.zone === 'over'
+            ? 'worried'
+            : 'dizzy',
+  )
+  let gaze = $derived(
+    s.moving ? (s.direction === 'in' ? -6 : 6) : mood === 'hopeful' ? -3 : mood === 'sleepy' ? 3 : 0,
+  )
+
+  // face geometry (viewBox 0 0 120 64): two eyes on one line
+  const EYES = [34, 86]
+  const CY = 36
+  // upper eyelid closed down to `frac` of the eye's height: the part of the ellipse above it
+  function lid(cx: number, rx: number, ry: number, frac: number): string {
+    const y = CY - ry + 2 * ry * frac
+    const dx = rx * Math.sqrt(Math.max(0, 1 - ((y - CY) / ry) ** 2))
+    return `M ${cx - dx} ${y} A ${rx} ${ry} 0 ${frac > 0.5 ? 1 : 0} 1 ${cx + dx} ${y} Z`
+  }
+  // dizzy eyes: a two-turn spiral around each eye centre
+  const SPIRALS = EYES.map((cx) => {
+    const pts = Array.from({ length: 41 }, (_, i) => {
+      const a = (i / 40) * Math.PI * 4
+      const r = 2 + (i / 40) * 15
+      return `${(cx + r * Math.cos(a)).toFixed(1)} ${(CY + r * Math.sin(a)).toFixed(1)}`
+    })
+    return `M ${pts.join(' L ')}`
+  })
 </script>
 
 <div class="torso" class:compact style="--accent:{accent}">
@@ -58,6 +96,43 @@
         <span class="bubble" style="left:{b.x}%; width:{b.s}px; height:{b.s}px; --d:{b.d}s; --delay:{b.delay}s"></span>
       {/each}
     </div>
+
+    <!-- the capsule's face -->
+    <svg class="face {mood}" viewBox="0 0 120 64" aria-hidden="true">
+      {#key mood}
+        <g class="mood">
+          {#if mood === 'happy'}
+            {#each EYES as cx}
+              <path class="arc" d="M {cx - 15} {CY + 6} Q {cx} {CY - 20} {cx + 15} {CY + 6}" />
+              <ellipse class="blush" cx={cx < 60 ? cx - 6 : cx + 6} cy={CY + 20} rx="9" ry="4.5" />
+            {/each}
+          {:else if mood === 'dizzy'}
+            {#each SPIRALS as d}<path class="spiral" {d} />{/each}
+          {:else}
+            {@const big = mood === 'worried'}
+            {#each EYES as cx, i}
+              <g class="eye">
+                <ellipse class="white" {cx} cy={CY} rx={big ? 20 : 18} ry={big ? 23 : 20} />
+                <g class="pupil" style="transform: translateY({gaze}px)">
+                  <circle {cx} cy={CY} r={big ? 6 : 8.5} />
+                  <circle class="glint" cx={cx - 3} cy={CY - 3} r="2.6" />
+                </g>
+                {#if mood === 'sleepy'}<path class="lid" d={lid(cx, 18, 20, 0.55)} />{/if}
+                {#if big}
+                  <path
+                    class="brow"
+                    d={i === 0
+                      ? `M ${cx - 17} ${CY - 22} L ${cx + 11} ${CY - 33}`
+                      : `M ${cx - 11} ${CY - 33} L ${cx + 17} ${CY - 22}`}
+                  />
+                {/if}
+              </g>
+            {/each}
+          {/if}
+        </g>
+      {/key}
+      {#if mood === 'sleepy' && !s.moving}<text class="zzz" x="108" y="14">z</text>{/if}
+    </svg>
 
     <!-- pumping direction chevrons while moving -->
     {#if s.moving}
@@ -204,6 +279,78 @@
     animation-duration: calc(var(--d) * 0.55);
   }
 
+  /* the face sits in the dome, above the red line, drawn over everything */
+  .face {
+    position: absolute;
+    z-index: 2;
+    top: 6%;
+    left: 50%;
+    width: calc(var(--w) * 0.55);
+    transform: translateX(-50%);
+    overflow: visible;
+    pointer-events: none;
+  }
+  .face .mood {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: pop 0.35s ease-out;
+  }
+  .face .white {
+    fill: #f4f7ff;
+    stroke: #0b1020;
+    stroke-width: 2.5;
+  }
+  .face .pupil {
+    fill: #0b1020;
+    transition: transform 0.5s ease;
+  }
+  .face .glint {
+    fill: #fff;
+  }
+  .face .eye {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: blink 4.6s ease-in-out infinite;
+  }
+  .face.sleepy .eye {
+    animation: none;
+  }
+  .face .lid {
+    fill: #2a3354;
+    stroke: #0b1020;
+    stroke-width: 2;
+  }
+  .face .brow,
+  .face .arc,
+  .face .spiral {
+    fill: none;
+    stroke: #f4f7ff;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .face .brow {
+    stroke-width: 4;
+  }
+  .face .arc {
+    stroke-width: 5;
+  }
+  .face .spiral {
+    stroke-width: 3.2;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: spin 1.6s linear infinite;
+  }
+  .face .blush {
+    fill: #ff8fab;
+    opacity: 0.55;
+  }
+  .face .zzz {
+    fill: var(--dim);
+    font-size: 15px;
+    font-weight: 800;
+    animation: zz 2.4s ease-in-out infinite;
+  }
+
   .flow {
     position: absolute;
     inset-inline-end: 14px;
@@ -250,7 +397,23 @@
   @keyframes chev {
     50% { opacity: 1; transform: translateY(-4px); }
   }
+  @keyframes pop {
+    from { transform: scale(0.6); opacity: 0; }
+  }
+  @keyframes blink {
+    0%, 92%, 100% { transform: scaleY(1); }
+    96% { transform: scaleY(0.08); }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes zz {
+    0% { transform: translate(0, 6px); opacity: 0; }
+    40% { opacity: 1; }
+    100% { transform: translate(6px, -10px); opacity: 0; }
+  }
   @media (prefers-reduced-motion: reduce) {
     .wave, .bubble, .vessel.moving, .flow span { animation: none; }
+    .face .mood, .face .eye, .face .spiral, .face .zzz { animation: none; }
   }
 </style>
