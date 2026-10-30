@@ -77,6 +77,13 @@ const de: Record<string, string> = {
   'reset.eta': 'noch etwa {s} s',
   'reset.almost': 'gleich fertig …',
 
+  // web demo: footer links (Impressum / Datenschutz)
+  'web.project': 'Ein Projekt von',
+  'web.funded': 'Gefördert durch Horizon Europe',
+  'web.imprint': 'Impressum',
+  'web.privacy': 'Datenschutz',
+  'web.close': 'Schließen',
+
   // band + bar
   'band.explain': 'Grüner Bereich = sicher · zu wenig wirkt nicht · zu viel ist gefährlich',
   'bar.title': 'Spiegel',
@@ -774,6 +781,14 @@ const en: Record<string, string> = {
   'reset.sub': 'The level is being reset.',
   'reset.eta': 'about {s} s to go',
   'reset.almost': 'almost ready …',
+
+  // web demo: torso caption + footer links (Impressum / Datenschutz)
+  'bar.title': 'Level',
+  'web.project': 'A project by',
+  'web.funded': 'Funded by Horizon Europe',
+  'web.imprint': 'Legal notice',
+  'web.privacy': 'Privacy',
+  'web.close': 'Close',
 
   // ===== Story 1 „The Breakfast Trap" (FDI · grapefruit × simvastatin) =====
   // The torso's water level = "the level" (how much drug is in the blood).
@@ -1613,6 +1628,14 @@ const fr: Record<string, string> = {
   'reset.eta': 'encore {s} s environ',
   'reset.almost': 'presque prêt …',
 
+  // web demo: torso caption + footer links (Impressum / Datenschutz)
+  'bar.title': 'Taux',
+  'web.project': 'Un projet de',
+  'web.funded': 'Financé par Horizon Europe',
+  'web.imprint': 'Mentions légales',
+  'web.privacy': 'Confidentialité',
+  'web.close': 'Fermer',
+
   // ===== Histoire 1 « Le piège du petit-déjeuner » (pamplemousse × simvastatine) =====
   // Le niveau d'eau du torse = « le taux » (la quantité de médicament dans le sang).
   'fr.case': 'M. Schmidt, 68 ans · Simvastatine',
@@ -2451,6 +2474,14 @@ const nl: Record<string, string> = {
   'reset.eta': 'nog ongeveer {s} s',
   'reset.almost': 'bijna klaar …',
 
+  // web demo: torso caption + footer links (Impressum / Datenschutz)
+  'bar.title': 'Spiegel',
+  'web.project': 'Een project van',
+  'web.funded': 'Gefinancierd door Horizon Europe',
+  'web.imprint': 'Colofon',
+  'web.privacy': 'Privacy',
+  'web.close': 'Sluiten',
+
   // ===== Verhaal 1 „De ontbijtval" (grapefruit × simvastatine) =====
   // Het waterpeil van de torso = „de spiegel" (hoeveel medicijn er in het bloed zit).
   'fr.case': 'Meneer Schmidt, 68 · Simvastatine',
@@ -3287,6 +3318,14 @@ const ar: Record<string, string> = {
   'reset.sub': 'تتم إعادة ضبط المستوى.',
   'reset.eta': 'متبقٍّ حوالي {s} ثانية',
   'reset.almost': 'اقترب الانتهاء …',
+
+  // web demo: torso caption + footer links (Impressum / Datenschutz)
+  'bar.title': 'المستوى',
+  'web.project': 'مشروع من',
+  'web.funded': 'بتمويل من برنامج Horizon Europe',
+  'web.imprint': 'إشعار قانوني',
+  'web.privacy': 'الخصوصية',
+  'web.close': 'إغلاق',
 
   // ===== القصة 1 «فخ الفطور» (جريب فروت × سيمفاستاتين) =====
   // منسوب الماء في الجذع = «المستوى» (كمية الدواء في الدم).
